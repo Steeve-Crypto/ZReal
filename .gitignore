@@ -171,3 +171,8 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+venv/
+.venv/
+__pycache__/
+*.pyc
