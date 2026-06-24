@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn zreal.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgres://zreal:zreal@db:5432/zreal
+      - REDIS_URL=redis://redis:6379/0
+      - ZCASHRPC_USER=${ZCASHRPC_USER}
+      - ZCASHRPC_PASSWORD=${ZCASHRPC_PASSWORD}
+      - ZCASHRPC_HOST=${ZCASHRPC_HOST:-zcash}
+      - ZCASHRPC_PORT=${ZCASHRPC_PORT:-18232}
+      - ZCASH_TX_TOOL_PATH=${ZCASH_TX_TOOL_PATH}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - ZSA_ISSUANCE_STRATEGY=${ZSA_ISSUANCE_STRATEGY:-auto}
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: postgis/postgis:15-3.3
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=zreal
+      - POSTGRES_PASSWORD=zreal
+      - POSTGRES_DB=zreal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Optional: Zcash testnet node (comment out if using external node)
+  # zcash:
+  #   image: zcash/zcashd:latest
+  #   volumes:
+  #     - zcash_data:/home/zcash/.zcash
+  #   environment:
+  #     - ZCASH_NETWORK=testnet
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
+  # zcash_data:

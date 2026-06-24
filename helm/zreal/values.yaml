@@ -1,0 +1,112 @@
+# Default values for ZReal Helm chart
+
+replicaCount: 3
+
+image:
+  repository: your-registry/zreal
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: zreal.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: zreal-tls
+      hosts:
+        - zreal.example.com
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Environment variables from ConfigMap and Secret
+envFrom:
+  - configMapRef:
+      name: zreal-config
+  - secretRef:
+      name: zreal-secrets
+
+# Celery
+celery:
+  worker:
+    replicaCount: 2
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+  beat:
+    replicaCount: 1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+
+# Redis
+redis:
+  enabled: true
+  replicaCount: 1
+
+# Persistence for media (consider S3 for production)
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# Health checks
+probes:
+  liveness:
+    path: /health/
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /health/
+    initialDelaySeconds: 10
+    periodSeconds: 5

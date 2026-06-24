@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: zreal
+  labels:
+    app: falco
+spec:
+  selector:
+    matchLabels:
+      app: falco
+  template:
+    metadata:
+      labels:
+        app: falco
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: falco
+          image: falcosecurity/falco:0.38
+          imagePullPolicy: IfNotPresent
+          args:
+            - /usr/bin/falco
+            - -c
+            - /etc/falco/falco.yaml
+            - -r
+            - /etc/falco/rules.d
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /host/proc
+              name: proc
+              readOnly: true
+            - mountPath: /host/dev
+              name: dev
+            - mountPath: /host/sys
+              name: sys
+              readOnly: true
+            - mountPath: /etc/falco
+              name: config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: config
+          configMap:
+            name: falco-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: zreal
+data:
+  falco.yaml: |
+    # Falco configuration
+    rules_file:
+      - /etc/falco/rules.d
+    priority: warning
+    output_format: json
+    json_output: true
+    json_include_output_property: true
+    http_output:
+      enabled: true
+      url: http://falco-sidekick:2801
+    # Add more outputs as needed (Kafka, S3, etc.)

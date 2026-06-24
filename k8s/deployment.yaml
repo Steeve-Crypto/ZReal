@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zreal-web
+  namespace: zreal
+  labels:
+    app: zreal
+    component: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zreal
+      component: web
+  template:
+    metadata:
+      labels:
+        app: zreal
+        component: web
+    spec:
+      containers:
+        - name: web
+          image: your-registry/zreal:latest   # ← Change this
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: zreal-config
+            - secretRef:
+                name: zreal-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: zreal-media-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zreal-media-pvc
+  namespace: zreal
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # For production, consider using cloud storage (S3, GCS, Azure Blob) instead of PVC

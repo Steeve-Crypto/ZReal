@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ZReal Property Map - Zcash RWA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Leaflet CSS & JS - Best free open-source Google Maps alternative -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 600px; width: 100%; border-radius: 12px; }
+        body { font-family: system-ui, sans-serif; margin: 20px; background: #f8f9fa; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #1a1a2e; }
+        .property-popup { max-width: 250px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ ZReal Property Map</h1>
+        <p><strong>Private Real Estate on Zcash</strong> — Explore tokenized properties. Click markers for details & ZSA status.</p>
+        
+        <div id="map"></div>
+        
+        <p style="margin-top: 20px; color: #666;">
+            Powered by Leaflet + OpenStreetMap (completely free & open-source). 
+            PostGIS powers backend spatial queries.
+        </p>
+    </div>
+
+    <script>
+        // Initialize map (default center - change in view)
+        var map = L.map('map').setView([{{ map_center.0 }}, {{ map_center.1 }}], 6);
+        
+        // OpenStreetMap tiles - free Google Maps alternative
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors | ZReal on Zcash',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Add property markers from Django context
+        {% for prop in properties %}
+        var marker = L.marker([{{ prop.location.y }}, {{ prop.location.x }}]).addTo(map);
+        
+        var popupContent = `
+            <div class="property-popup">
+                <h3>{{ prop.title }}</h3>
+                <p><strong>Address:</strong> {{ prop.address }}</p>
+                <p><strong>Size:</strong> {{ prop.size_sqm }} sqm</p>
+                <p><strong>Est. Value:</strong> ${{ prop.estimated_value|default:"N/A" }}</p>
+                <p><strong>Status:</strong> <span style="color: {% if prop.status == 'tokenized' %}green{% else %}orange{% endif %};">{{ prop.status }}</span></p>
+                <p><strong>Total Shares:</strong> {{ prop.total_shares }}</p>
+                {% if prop.zsa_asset_id %}
+                <p><strong>ZSA ID:</strong> <code>{{ prop.zsa_asset_id|truncatechars:20 }}</code></p>
+                {% endif %}
+                <a href="/admin/properties/property/{{ prop.id }}/change/" target="_blank">Manage in Admin</a>
+            </div>
+        `;
+        marker.bindPopup(popupContent);
+        {% endfor %}
+
+        // Optional: Add click handler for future "Invest with Zcash" button
+        map.on('click', function(e) {
+            console.log('Map clicked at:', e.latlng);
+            // Future: Open investment modal with Zcash payment flow
+        });
+    </script>
+</body>
+</html>

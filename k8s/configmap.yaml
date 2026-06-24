@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zreal-config
+  namespace: zreal
+data:
+  DEBUG: "0"
+  ALLOWED_HOSTS: "yourdomain.com,www.yourdomain.com"
+  DATABASE_URL: "postgres://zreal:CHANGE_ME@postgres:5432/zreal"
+  REDIS_URL: "redis://redis:6379/0"
+  ZSA_ISSUANCE_STRATEGY: "auto"

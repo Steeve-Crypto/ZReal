@@ -1,0 +1,35 @@
+{
+  "dashboard": {
+    "title": "Celery Performance",
+    "tags": ["celery", "zreal"],
+    "panels": [
+      {
+        "title": "Celery Task Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(celery_tasks_total[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Celery Task Failures",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(celery_tasks_failed_total[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Active Celery Workers",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "celery_workers"
+          }
+        ]
+      }
+    ]
+  }
+}

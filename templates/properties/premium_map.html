@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZReal • Premium Geospatial Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background: #0F172A; color: #E2E8F0; font-family: 'Inter', system-ui, sans-serif; }
+        .map-container { border-radius: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+        .premium-header { background: rgba(15,23,42,0.95); backdrop-filter: blur(20px); }
+    </style>
+</head>
+<body>
+    <div class="max-w-7xl mx-auto px-6 pt-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-x-4">
+                <div class="w-11 h-11 bg-gradient-to-br from-[#D4AF37] to-[#B8860B] rounded-2xl flex items-center justify-center">
+                    <i class="fas fa-globe text-[#0F172A] text-3xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-4xl font-semibold tracking-tighter">Premium Geospatial</h1>
+                    <p class="text-white/60">Folium + OSMnx • {{ property_count }} Properties</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-x-3">
+                <a href="/issuer/dashboard/" class="px-6 py-3 rounded-3xl border border-white/20 hover:bg-white/5 flex items-center gap-x-2 text-sm">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Dashboard</span>
+                </a>
+                <a href="/properties/map/" class="px-6 py-3 rounded-3xl bg-white/10 hover:bg-white/20 text-sm flex items-center gap-x-2">
+                    <span>Classic Map</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Map -->
+        <div class="map-container shadow-2xl">
+            {{ map_html|safe }}
+        </div>
+        
+        <div class="mt-6 text-center text-xs text-white/40">
+            Interactive layers • Heatmap of property values • Rich popups with Legal Shield status • Powered by Folium + OSMnx
+        </div>
+    </div>
+</body>
+</html>

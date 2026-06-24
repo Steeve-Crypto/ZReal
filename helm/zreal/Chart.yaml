@@ -1,0 +1,17 @@
+apiVersion: v2
+name: zreal
+description: Privacy-first Real Estate RWA Tokenization Platform on Zcash
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: ZReal Team
+keywords:
+  - rwa
+  - real-estate
+  - zcash
+  - tokenization
+  - privacy
+home: https://github.com/your-org/zreal
+sources:
+  - https://github.com/your-org/zreal

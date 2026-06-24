@@ -1,0 +1,43 @@
+# Custom Falco rules for ZReal
+
+- rule: ZReal ZSA Issuance Detected
+  desc: Detects ZSA issuance activity (potential sensitive operation)
+  condition: >
+    evt.type in (execve, open) and 
+    proc.name in (python, gunicorn) and 
+    (proc.cmdline contains "issue_zsa" or 
+     proc.cmdline contains "zsa_issuance")
+  output: "ZReal ZSA issuance detected (user=%user.name command=%proc.cmdline container=%container.name)"
+  priority: WARNING
+  tags: [zreal, security, zsa]
+
+- rule: ZReal Document Upload
+  desc: Detects document uploads to Legal Shield
+  condition: >
+    evt.type in (open, write) and 
+    proc.name in (python, gunicorn) and 
+    (fd.name contains "upload-document" or 
+     fd.name contains "property_documents")
+  output: "ZReal document upload detected (user=%user.name file=%fd.name)"
+  priority: INFO
+  tags: [zreal, compliance]
+
+- rule: Suspicious Zcash RPC Access
+  desc: Detects unusual access to Zcash RPC
+  condition: >
+    evt.type = connect and 
+    fd.sport = 18232 and 
+    not proc.name in (python, gunicorn, celery)
+  output: "Suspicious Zcash RPC access from %proc.name (user=%user.name)"
+  priority: WARNING
+  tags: [zreal, security, zcash]
+
+- rule: High Volume Document Processing
+  desc: Detects potential abuse of Legal Shield processing
+  condition: >
+    evt.type in (execve, open) and 
+    proc.cmdline contains "pytesseract" and 
+    evt.count > 50
+  output: "High volume document processing detected"
+  priority: NOTICE
+  tags: [zreal, compliance]

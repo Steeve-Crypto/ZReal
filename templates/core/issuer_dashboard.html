@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZReal • Issuer Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=Playfair+Display:wght@700&amp;display=swap');
+        
+        :root {
+            --primary: #0F172A;
+            --accent: #D4AF37;
+            --glass: rgba(255, 255, 255, 0.08);
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            color: #E2E8F0;
+        }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .premium-card {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+                       box-shadow 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        
+        .premium-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        
+        .section-header {
+            font-family: 'Playfair Display', Georgia, serif;
+            letter-spacing: -0.02em;
+        }
+        
+        .gold-accent {
+            color: #D4AF37;
+        }
+        
+        .nav-link {
+            transition: all 0.2s ease;
+        }
+        
+        .nav-link:hover {
+            color: #D4AF37;
+        }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .property-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .property-card:hover {
+            transform: translateY(-2px);
+            border-color: #D4AF37;
+        }
+        
+        .elegant-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .elegant-btn::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -100%;
+            width: 50%;
+            height: 200%;
+            background: linear-gradient(
+                to right,
+                transparent 20%,
+                rgba(255,255,255,0.3) 50%,
+                transparent 80%
+            );
+            transform: skewX(-25deg);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            100% {
+                transform: skewX(-25deg) translateX(400%);
+            }
+        }
+        
+        .metric-value {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Top Navigation -->
+    <nav class="border-b border-white/10 bg-[#0F172A]/80 backdrop-blur-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-8">
+            <div class="flex items-center justify-between h-20">
+                <!-- Logo -->
+                <div class="flex items-center gap-x-3">
+                    <div class="w-9 h-9 bg-gradient-to-br from-[#D4AF37] to-[#B8860B] rounded-2xl flex items-center justify-center">
+                        <i class="fas fa-shield-alt text-[#0F172A] text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-3xl font-semibold tracking-tighter">ZReal</span>
+                        <span class="text-xs font-mono text-[#D4AF37] ml-1">PRO</span>
+                    </div>
+                </div>
+
+                <!-- User Menu -->
+                <div class="flex items-center gap-x-4">
+                    <div class="flex items-center gap-x-3 bg-white/5 px-4 py-2 rounded-3xl border border-white/10">
+                        <div class="w-8 h-8 bg-gradient-to-br from-[#D4AF37] to-[#B8860B] rounded-2xl flex items-center justify-center text-[#0F172A] text-sm font-bold">
+                            {{ request.user.username|slice:":2"|upper }}
+                        </div>
+                        <div>
+                            <div class="font-medium text-sm">{{ request.user.username }}</div>
+                            <div class="text-[10px] text-white/50 -mt-0.5">Issuer</div>
+                        </div>
+                    </div>
+                    
+                    <a href="{% url 'account_logout' %}" 
+                       class="px-5 py-2.5 text-sm font-medium rounded-3xl border border-white/20 hover:bg-white/5 transition-colors flex items-center gap-x-2">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-8 pt-10 pb-16">
+        
+        <!-- Hero Welcome -->
+        <div class="flex items-end justify-between mb-10">
+            <div>
+                <div class="flex items-center gap-x-3 mb-2">
+                    <h1 class="section-header text-6xl font-bold tracking-tighter">Welcome back,</h1>
+                    <span class="text-6xl font-light text-white/60">{{ request.user.first_name|default:request.user.username }}</span>
+                </div>
+                <p class="text-xl text-white/60 max-w-md">Your private real estate empire on Zcash. Tokenize with confidence.</p>
+            </div>
+            
+            <!-- Status Badge -->
+            <div class="flex items-center gap-x-3">
+                {% if has_active_subscription %}
+                    <div class="px-6 py-3 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-x-3">
+                        <div class="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+                        <div>
+                            <span class="font-semibold text-emerald-400">Active Subscription</span>
+                            <div class="text-xs text-emerald-400/70">Issuer Pro</div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="px-6 py-3 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-x-3">
+                        <div class="w-3 h-3 bg-amber-400 rounded-full"></div>
+                        <div>
+                            <span class="font-semibold text-amber-400">Subscription Required</span>
+                            <div class="text-xs text-amber-400/70">Unlock ZSA issuance</div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+            <div class="glass rounded-3xl p-6 border border-white/10">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-white/50">Properties</div>
+                        <div class="text-4xl font-semibold tracking-tighter mt-1">{{ my_properties|length }}</div>
+                    </div>
+                    <i class="fas fa-building text-4xl text-white/20"></i>
+                </div>
+            </div>
+            <div class="glass rounded-3xl p-6 border border-white/10">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-white/50">Tokenized</div>
+                        <div class="text-4xl font-semibold tracking-tighter mt-1">
+                            {{ my_properties|length|default:"0" }}
+                        </div>
+                    </div>
+                    <i class="fas fa-shield-alt text-4xl text-[#D4AF37]/70"></i>
+                </div>
+            </div>
+            <div class="glass rounded-3xl p-6 border border-white/10">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-white/50">Total Value</div>
+                        <div class="text-4xl font-semibold tracking-tighter mt-1">$12.4M</div>
+                    </div>
+                    <i class="fas fa-chart-line text-4xl text-emerald-400/70"></i>
+                </div>
+            </div>
+            <div class="glass rounded-3xl p-6 border border-white/10">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-white/50">ZSA Issued</div>
+                        <div class="text-4xl font-semibold tracking-tighter mt-1">4</div>
+                    </div>
+                    <i class="fas fa-coins text-4xl text-[#D4AF37]"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Your Properties -->
+            <div class="lg:col-span-7">
+                <div class="flex items-center justify-between mb-4 px-1">
+                    <h2 class="section-header text-3xl font-semibold tracking-tight">Your Properties</h2>
+                    <a href="/admin/properties/property/add/" 
+                       class="flex items-center gap-x-2 text-sm font-medium px-5 py-2.5 rounded-3xl border border-white/20 hover:bg-white/5 transition-all">
+                        <i class="fas fa-plus mr-2"></i>
+                        <span>Add Property</span>
+                    </a>
+                </div>
+                
+                <div class="glass rounded-3xl border border-white/10 p-2">
+                    {% if my_properties %}
+                        <div class="divide-y divide-white/10">
+                            {% for prop in my_properties %}
+                            <div class="property-card flex items-center justify-between p-5 hover:bg-white/5 rounded-3xl transition-all group">
+                                <div class="flex items-center gap-x-4">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl flex items-center justify-center border border-white/10">
+                                        <i class="fas fa-home text-2xl text-white/60"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-lg">{{ prop.title }}</div>
+                                        <div class="text-sm text-white/60">{{ prop.address }}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center gap-x-4">
+                                    <div class="text-right">
+                                        <div class="font-mono text-sm text-white/80">{{ prop.size_sqm|floatformat:0 }} sqm</div>
+                                        <div class="text-xs text-white/50">Est. ${{ prop.estimated_value|default:"—" }}</div>
+                                    </div>
+                                    
+                                    <div>
+                                        {% if prop.status == 'tokenized' or prop.status == 'active' %}
+                                            <span class="status-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Tokenized</span>
+                                        {% elif prop.status == 'tokenizing' %}
+                                            <span class="status-badge bg-amber-500/10 text-amber-400 border border-amber-500/30">Tokenizing</span>
+                                        {% else %}
+                                            <span class="status-badge bg-white/10 text-white/70 border border-white/20">Draft</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if has_active_subscription %}
+                                        <a href="{% url 'issue_zsa' prop.pk %}" 
+                                           class="px-5 py-2 text-sm font-medium rounded-3xl bg-white/5 hover:bg-[#D4AF37] hover:text-[#0F172A] border border-white/20 transition-all flex items-center gap-x-2 group-hover:border-[#D4AF37]">
+                                            <span>Issue ZSA</span>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="p-12 text-center">
+                            <i class="fas fa-building text-6xl text-white/20 mb-4"></i>
+                            <p class="text-lg text-white/60">No properties yet.</p>
+                            <a href="/admin/properties/property/add/" class="inline-block mt-4 text-sm px-6 py-3 rounded-3xl border border-white/30 hover:bg-white/5">
+                                Add your first property
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Quick Actions + Subscription -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Subscription Card -->
+                <div class="glass rounded-3xl border border-white/10 p-7" id="subscribe">
+                    <div class="flex justify-between items-start mb-5">
+                        <div>
+                            <div class="uppercase tracking-[2px] text-xs font-medium text-white/50">PREMIUM PLAN</div>
+                            <div class="text-3xl font-semibold tracking-tight mt-1">Issuer Pro</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-4xl font-semibold tracking-tighter">$299</div>
+                            <div class="text-xs text-white/50 -mt-1">per month</div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3 mb-7 text-sm">
+                        <div class="flex items-center gap-x-3"><i class="fas fa-check text-[#D4AF37] w-4"></i> Unlimited ZSA Issuance</div>
+                        <div class="flex items-center gap-x-3"><i class="fas fa-check text-[#D4AF37] w-4"></i> Private Distribution Flows</div>
+                        <div class="flex items-center gap-x-3"><i class="fas fa-check text-[#D4AF37] w-4"></i> Advanced AI Valuation</div>
+                        <div class="flex items-center gap-x-3"><i class="fas fa-check text-[#D4AF37] w-4"></i> Priority Support + Analytics</div>
+                    </div>
+                    
+                    {% if has_active_subscription %}
+                        <div class="px-6 py-3.5 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-center text-emerald-400 font-medium">
+                            <i class="fas fa-check-circle mr-2"></i> Active — Thank you for being a Pro member
+                        </div>
+                    {% else %}
+                        <button onclick="startStripeCheckout()" 
+                                class="elegant-btn w-full py-4 rounded-3xl bg-gradient-to-r from-[#D4AF37] to-[#B8860B] hover:brightness-110 text-[#0F172A] font-semibold text-lg flex items-center justify-center gap-x-3 shadow-xl shadow-[#D4AF37]/30">
+                            <span>Subscribe with Stripe</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <p class="text-center text-xs text-white/50 mt-3">Secure checkout • Cancel anytime</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="glass rounded-3xl border border-white/10 p-7">
+                    <h3 class="font-semibold text-lg mb-4 tracking-tight">Quick Actions</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <a href="/properties/map/" class="flex items-center gap-x-3 px-5 py-4 rounded-3xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm font-medium">
+                            <i class="fas fa-map text-[#D4AF37]"></i>
+                            <span>Explore Map</span>
+                        </a>
+                        <a href="/admin/properties/property/add/" class="flex items-center gap-x-3 px-5 py-4 rounded-3xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm font-medium">
+                            <i class="fas fa-plus text-[#D4AF37]"></i>
+                            <span>Add Property</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Legal Shield - Document Intelligence -->
+        <div class="mt-12">
+            <div class="flex items-center justify-between mb-6 px-1">
+                <div>
+                    <h2 class="section-header text-3xl font-semibold tracking-tight flex items-center gap-x-3">
+                        <i class="fas fa-shield-alt text-[#D4AF37]"></i>
+                        Legal Shield
+                    </h2>
+                    <p class="text-white/60 mt-1">AI-powered document analysis & compliance automation</p>
+                </div>
+            </div>
+            
+            <div class="glass rounded-3xl border border-white/10 p-8">
+                <div class="grid md:grid-cols-12 gap-8">
+                    
+                    <!-- Upload Area -->
+                    <div class="md:col-span-5">
+                        <div class="border-2 border-dashed border-white/30 rounded-3xl p-8 text-center hover:border-[#D4AF37]/50 transition-all cursor-pointer" 
+                             onclick="document.getElementById('doc-upload').click()">
+                            <i class="fas fa-file-upload text-5xl text-white/40 mb-4"></i>
+                            <div class="font-semibold text-lg">Upload Legal Document</div>
+                            <div class="text-sm text-white/50 mt-1">PDF, images, or scans • Deed, Title, Contract, etc.</div>
+                            
+                            <input type="file" id="doc-upload" class="hidden" accept=".pdf,.png,.jpg,.jpeg" 
+                                   onchange="uploadDocument(this)">
+                            
+                            <div class="mt-6">
+                                <select id="doc-type" class="bg-white/5 border border-white/20 rounded-2xl px-4 py-2 text-sm w-full">
+                                    <option value="Deed">Property Deed</option>
+                                    <option value="Title">Title Report</option>
+                                    <option value="Contract">Purchase Contract</option>
+                                    <option value="Appraisal">Appraisal Report</option>
+                                    <option value="Other">Other Legal Document</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status & Results -->
+                    <div class="md:col-span-7">
+                        <div id="legal-shield-results" class="hidden">
+                            <div class="flex items-center gap-x-3 mb-4">
+                                <div class="text-emerald-400"><i class="fas fa-check-circle text-2xl"></i></div>
+                                <div>
+                                    <div class="font-semibold">Document Processed</div>
+                                    <div class="text-xs text-white/50" id="processing-time"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white/5 rounded-2xl p-5 border border-white/10">
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <div class="text-white/50 text-xs">Detected Address</div>
+                                        <div id="detected-address" class="font-medium mt-1">—</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-white/50 text-xs">Detected Size</div>
+                                        <div id="detected-size" class="font-medium mt-1">—</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-white/50 text-xs">Detected Owner</div>
+                                        <div id="detected-owner" class="font-medium mt-1">—</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-white/50 text-xs">OCR Confidence</div>
+                                        <div id="ocr-confidence" class="font-medium mt-1">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 text-xs text-white/50">
+                                Extracted data has been saved and can be used for ZSA metadata and compliance.
+                            </div>
+                        </div>
+                        
+                        <div id="legal-shield-placeholder">
+                            <div class="text-center py-8 text-white/50">
+                                <i class="fas fa-file-alt text-4xl mb-3 opacity-40"></i>
+                                <p>Upload a document to activate Legal Shield analysis</p>
+                                <p class="text-xs mt-1">Automatic extraction • Risk flagging • Structured data for tokenization</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 text-center">
+            <a href="/properties/map/" class="text-sm text-white/50 hover:text-white flex items-center justify-center gap-x-2">
+                <span>Back to Property Map</span> 
+                <i class="fas fa-arrow-right text-xs"></i>
+            </a>
+        </div>
+        
+    </div>
+
+    <script>
+        let currentLegalShieldPropertyId = null;
+        let currentLegalShieldPropertyTitle = '';
+
+        function startStripeCheckout() {
+            const button = event.currentTarget;
+            if (button) {
+                button.disabled = true;
+                button.innerHTML = `<span class="flex items-center justify-center gap-x-3"><i class="fas fa-spinner fa-spin"></i> Redirecting to Stripe...</span>`;
+            }
+            
+            fetch("{% url 'create_checkout_session' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "Content-Type": "application/json"
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert("Error starting checkout: " + (data.error || "Unknown error"));
+                    if (button) {
+                        button.disabled = false;
+                        button.innerHTML = `Subscribe with Stripe`;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                alert("Network error. Please try again.");
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = `Subscribe with Stripe`;
+                }
+            });
+        }
+
+        // Open Legal Shield modal for a specific property
+        function openLegalShieldForProperty(propertyId, propertyTitle) {
+            currentLegalShieldPropertyId = propertyId;
+            currentLegalShieldPropertyTitle = propertyTitle;
+            
+            // Show a nice modal or reuse the existing section with context
+            const modalHtml = `
+                <div id="legal-shield-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200]">
+                    <div class="glass w-full max-w-2xl mx-4 rounded-3xl p-8 border border-white/20">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <div class="flex items-center gap-x-3">
+                                    <i class="fas fa-shield-alt text-[#D4AF37] text-3xl"></i>
+                                    <div>
+                                        <h3 class="text-2xl font-semibold">Legal Shield</h3>
+                                        <p class="text-sm text-white/60">${propertyTitle}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="closeLegalShieldModal()" class="text-3xl text-white/50 hover:text-white leading-none">&times;</button>
+                        </div>
+                        
+                        <div class="border-2 border-dashed border-white/30 rounded-3xl p-8 text-center mb-6 hover:border-[#D4AF37]/50 transition-all cursor-pointer" 
+                             onclick="document.getElementById('modal-doc-upload').click()">
+                            <i class="fas fa-file-upload text-5xl text-white/40 mb-4"></i>
+                            <div class="font-semibold">Upload Document for this Property</div>
+                            <div class="text-sm text-white/50 mt-1">PDF or image • Auto-extracted into ZSA metadata</div>
+                            
+                            <input type="file" id="modal-doc-upload" class="hidden" accept=".pdf,.png,.jpg,.jpeg" 
+                                   onchange="uploadDocumentForProperty(this)">
+                            
+                            <div class="mt-5">
+                                <select id="modal-doc-type" class="bg-white/5 border border-white/20 rounded-2xl px-4 py-2 text-sm w-full max-w-xs mx-auto">
+                                    <option value="Deed">Property Deed</option>
+                                    <option value="Title">Title Report</option>
+                                    <option value="Contract">Purchase Contract</option>
+                                    <option value="Appraisal">Appraisal</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="modal-results" class="hidden"></div>
+                        
+                        <div class="text-xs text-white/50 text-center mt-4">
+                            Extracted data will automatically enrich future ZSA issuances for this property.
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+        function closeLegalShieldModal() {
+            const modal = document.getElementById('legal-shield-modal');
+            if (modal) modal.remove();
+        }
+        
+        async function uploadDocumentForProperty(input) {
+            if (!input.files.length || !currentLegalShieldPropertyId) return;
+            
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('document', file);
+            formData.append('document_type', document.getElementById('modal-doc-type').value);
+            
+            const resultsDiv = document.getElementById('modal-results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = `
+                <div class="flex items-center gap-x-3 p-4 bg-white/5 rounded-2xl">
+                    <i class="fas fa-spinner fa-spin text-[#D4AF37]"></i>
+                    <span>Processing with Legal Shield...</span>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`/properties/${currentLegalShieldPropertyId}/upload-document/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultsDiv.innerHTML = `
+                        <div class="p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl">
+                            <div class="flex items-center gap-x-3 mb-3">
+                                <i class="fas fa-check-circle text-emerald-400"></i>
+                                <span class="font-semibold">Document linked & processed</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-4 text-sm">
+                                <div><span class="text-white/50">Address:</span> <span class="font-medium">${data.extracted_data?.detected_address || '—'}</span></div>
+                                <div><span class="text-white/50">Size:</span> <span class="font-medium">${data.extracted_data?.detected_size || '—'}</span></div>
+                            </div>
+                            <div class="mt-3 text-xs text-emerald-400/80">This data will now enrich ZSA metadata for this property.</div>
+                        </div>
+                    `;
+                    
+                    // Optional: Auto-close after success
+                    setTimeout(() => {
+                        closeLegalShieldModal();
+                        // Optionally refresh page or show toast
+                    }, 2500);
+                } else {
+                    resultsDiv.innerHTML = `<div class="text-red-400 p-4">Error: ${data.error}</div>`;
+                }
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="text-red-400 p-4">Upload failed.</div>`;
+            }
+        }
+        
+        // Legacy support for main Legal Shield section (optional)
+        async function uploadDocument(input) {
+            // Can keep or deprecate the main section upload
+            console.log("Main section upload - consider using per-property buttons");
+        }
+        
+        function initializeTailwind() {}
+        
+        // ==================== VISUAL TIMELINE MODAL ====================
+        async function showPropertyTimeline(propertyId, propertyTitle) {
+            const modalId = 'timeline-modal-' + propertyId;
+            
+            // Create modal
+            const modalHtml = `
+                <div id="${modalId}" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[200]">
+                    <div class="glass w-full max-w-2xl mx-4 rounded-3xl border border-white/20 max-h-[85vh] overflow-hidden flex flex-col">
+                        <!-- Header -->
+                        <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-2xl font-semibold flex items-center gap-x-3">
+                                    <i class="fas fa-history text-[#D4AF37]"></i>
+                                    <span>Property Timeline</span>
+                                </h3>
+                                <p class="text-sm text-white/60 mt-1">${propertyTitle}</p>
+                            </div>
+                            <button onclick="closeTimelineModal('${modalId}')" class="text-3xl text-white/50 hover:text-white leading-none">&times;</button>
+                        </div>
+                        
+                        <!-- Timeline Content -->
+                        <div class="p-6 overflow-y-auto flex-1" id="timeline-content-${propertyId}">
+                            <div class="flex justify-center py-12">
+                                <i class="fas fa-spinner fa-spin text-3xl text-white/40"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div class="p-5 border-t border-white/10 flex justify-between items-center bg-white/5">
+                            <a href="/properties/${propertyId}/export-legal-shield/" 
+                               class="px-5 py-2.5 text-sm rounded-3xl border border-white/20 hover:bg-white/10 flex items-center gap-x-2">
+                                <i class="fas fa-download"></i>
+                                <span>Export Legal Shield Report (CSV)</span>
+                            </a>
+                            
+                            <button onclick="closeTimelineModal('${modalId}')" 
+                                    class="px-6 py-2.5 text-sm rounded-3xl bg-white/10 hover:bg-white/20">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Fetch timeline data
+            try {
+                const response = await fetch(`/properties/${propertyId}/timeline/`);
+                const data = await response.json();
+                
+                const contentDiv = document.getElementById(`timeline-content-${propertyId}`);
+                
+                if (data.events && data.events.length > 0) {
+                    let html = '<div class="space-y-6">';
+                    
+                    data.events.forEach((event, index) => {
+                        const date = new Date(event.timestamp).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        });
+                        
+                        let icon = 'fas fa-circle';
+                        let color = '#64748B';
+                        
+                        if (event.type === 'document') {
+                            icon = 'fas fa-file-alt';
+                            color = '#D4AF37';
+                        } else if (event.type === 'zsa_issuance') {
+                            icon = 'fas fa-coins';
+                            color = '#3B82F6';
+                        }
+                        
+                        html += `
+                            <div class="flex gap-x-4">
+                                <div class="flex flex-col items-center">
+                                    <div class="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style="background: ${color}20; color: ${color}; border: 1px solid ${color}40;">
+                                        <i class="${icon}"></i>
+                                    </div>
+                                    ${index < data.events.length - 1 ? '<div class="w-px flex-1 bg-white/10 my-1"></div>' : ''}
+                                </div>
+                                
+                                <div class="flex-1 pb-6">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <div class="font-semibold">${event.title}</div>
+                                            <div class="text-xs text-white/50 mt-0.5">${date}</div>
+                                        </div>
+                                        <div class="text-xs px-3 py-1 rounded-full border" style="border-color: ${color}40; color: ${color};">
+                                            ${event.status || 'Completed'}
+                                        </div>
+                                    </div>
+                                    
+                                    ${event.details ? `
+                                        <div class="mt-3 text-xs bg-white/5 p-3 rounded-2xl border border-white/10">
+                                            ${Object.entries(event.details).map(([key, value]) => 
+                                                `<div><span class="text-white/50">${key}:</span> <span class="font-mono">${JSON.stringify(value)}</span></div>`
+                                            ).join('')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = `
+                        <div class="text-center py-10">
+                            <i class="fas fa-clock text-5xl text-white/20 mb-4"></i>
+                            <p class="text-white/60">No timeline events yet for this property.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById(`timeline-content-${propertyId}`).innerHTML = `
+                    <div class="text-center py-8 text-red-400">Failed to load timeline.</div>
+                `;
+            }
+        }
+        
+        function closeTimelineModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.remove();
+        }
+        
+        window.onload = function() {
+            initializeTailwind();
+        }
+        
+        // Add keyboard shortcut for Systems Map (press 'm')
+        document.addEventListener('keydown', function(e) {
+            if (e.key.toLowerCase() === 'm') {
+                window.location.href = '/systems-map/';
+            }
+        });
+    </script>
+</body>
+</html>

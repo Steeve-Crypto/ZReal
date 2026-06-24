@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: falco-sidekick
+  namespace: zreal
+  labels:
+    app: falco-sidekick
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: falco-sidekick
+  template:
+    metadata:
+      labels:
+        app: falco-sidekick
+    spec:
+      containers:
+        - name: falco-sidekick
+          image: falcosecurity/falco-sidekick:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 2801
+          env:
+            - name: FALCO_SIDECKICK_OUTPUTS
+              value: "webhook"
+            - name: FALCO_SIDECKICK_WEBHOOK_URL
+              value: "http://your-siem-webhook-endpoint"  # ← Change this
+            - name: FALCO_SIDECKICK_WEBHOOK_FORMAT
+              value: "json"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falco-sidekick
+  namespace: zreal
+spec:
+  selector:
+    app: falco-sidekick
+  ports:
+    - port: 2801
+      targetPort: 2801
+      protocol: TCP

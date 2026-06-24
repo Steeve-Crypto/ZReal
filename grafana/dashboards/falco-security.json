@@ -1,0 +1,35 @@
+{
+  "dashboard": {
+    "title": "Falco Security Events",
+    "tags": ["security", "falco"],
+    "panels": [
+      {
+        "title": "Falco Alerts by Priority",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "count by (priority) (falco_events)"
+          }
+        ]
+      },
+      {
+        "title": "ZSA Issuance Alerts",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(falco_events{rule=~\".*ZSA.*\"}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Document Upload Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(falco_events{rule=~\".*Document.*\"}[5m])"
+          }
+        ]
+      }
+    ]
+  }
+}

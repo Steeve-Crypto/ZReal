@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "title": "ZReal Overview",
+    "tags": ["zreal"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total[5m])",
+            "legendFormat": "{{view}}"
+          }
+        ]
+      },
+      {
+        "title": "HTTP Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(django_http_responses_total{status=~\"5..\"}[5m])",
+            "legendFormat": "5xx errors"
+          }
+        ]
+      },
+      {
+        "title": "ZSA Issuances",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(zreal_zsa_issuances_total[1h])"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

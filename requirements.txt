@@ -1,0 +1,16 @@
+Django>=5.0
+djangorestframework
+django-allauth
+dj-stripe
+psycopg2-binary
+django-filter
+requests
+scikit-learn
+joblib
+pandas
+# For future Celery
+celery[redis]
+redis
+
+# Zcash specific (add more as needed)
+# python-bitcoinrpc or requests for RPC
