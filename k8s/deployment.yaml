@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: your-registry/zreal:latest   # ← Change this
+          image: ghcr.io/steeve-crypto/zreal:latest
           ports:
             - containerPort: 8000
           envFrom:

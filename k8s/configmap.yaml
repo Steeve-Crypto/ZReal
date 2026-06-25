@@ -5,8 +5,7 @@ metadata:
   namespace: zreal
 data:
   DEBUG: "0"
-  ALLOWED_HOSTS: "yourdomain.com,www.yourdomain.com"
-  DATABASE_URL: "postgres://zreal:CHANGE_ME@postgres:5432/zreal"
+  ALLOWED_HOSTS: ""
   REDIS_URL: "redis://redis:6379/0"
   ZSA_ISSUANCE_BACKEND: "zcash_tx_tool"
   ZCASH_ZSA_ISSUE_COMMAND: "{tool} create-zsa-issuance --from {issuer_zaddr} --asset-symbol {asset_symbol} --total-shares {total_shares} --network {network}"

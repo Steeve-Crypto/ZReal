@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: celery-worker
-          image: your-registry/zreal:latest
+          image: ghcr.io/steeve-crypto/zreal:latest
           command: ["celery", "-A", "zreal", "worker", "--loglevel=info"]
           envFrom:
             - configMapRef:
@@ -77,7 +77,7 @@ spec:
     spec:
       containers:
         - name: celery-beat
-          image: your-registry/zreal:latest
+          image: ghcr.io/steeve-crypto/zreal:latest
           command: ["celery", "-A", "zreal", "beat", "--loglevel=info"]
           envFrom:
             - configMapRef:

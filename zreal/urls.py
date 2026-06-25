@@ -4,7 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from properties.views import (
     property_map, 
-    issue_zsa_example, 
+    issue_zsa,
     generate_sapling_address_view,
     property_create,
     property_edit,
@@ -28,7 +28,7 @@ urlpatterns = [
     path('investor/browse/', investor_property_browse, name='investor_browse'),
     path('properties/new/', property_create, name='property_create'),
     path('properties/<int:pk>/edit/', property_edit, name='property_edit'),
-    path('properties/<int:pk>/issue-zsa/', issue_zsa_example, name='issue_zsa'),
+    path('properties/<int:pk>/issue-zsa/', issue_zsa, name='issue_zsa'),
     path('properties/<int:pk>/refresh-zsa-status/', refresh_zsa_status, name='refresh_zsa_status'),
     path('properties/<int:pk>/upload-document/', upload_property_document, name='upload_property_document'),
     path('tokenization/operations/<int:pk>/', tokenization_operation_detail, name='tokenization_operation_detail'),

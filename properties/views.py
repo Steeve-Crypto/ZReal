@@ -184,7 +184,7 @@ def property_edit(request, pk):
 
 @login_required
 @require_POST
-def issue_zsa_example(request, pk):
+def issue_zsa(request, pk):
     """Issue a real ZSA using the configured ZSA backend/tool."""
     prop = _issuer_property_or_404(request.user, pk)
     if settings.REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA and not request.user.profile.has_active_subscription:

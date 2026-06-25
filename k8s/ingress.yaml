@@ -5,12 +5,10 @@ metadata:
   namespace: zreal
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"   # Optional
 spec:
   ingressClassName: nginx
   rules:
-    - host: yourdomain.com   # ← Change this
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
@@ -19,7 +17,3 @@ spec:
                 name: zreal-web
                 port:
                   number: 80
-  tls:
-    - hosts:
-        - yourdomain.com
-      secretName: zreal-tls

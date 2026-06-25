@@ -1,25 +1,34 @@
 # ZReal Kubernetes Deployment
 
-This folder contains Kubernetes manifests for deploying ZReal to production.
+This directory contains Kubernetes manifests for the Django backend services.
 
-## Structure
+## Files
 
-- `namespace.yaml`           → Namespace
-- `deployment.yaml`          → Web deployment + PVC for media
-- `service.yaml`             → ClusterIP Service
-- `ingress.yaml`             → Ingress (Nginx + TLS)
-- `configmap.yaml`           → Non-sensitive configuration
-- `secrets.yaml`             → Sensitive values (DO NOT COMMIT REAL SECRETS)
-- `hpa.yaml`                 → Horizontal Pod Autoscaler
-- `celery-worker.yaml`       → Celery worker + beat
-- `redis.yaml`               → Redis for Celery
+- `namespace.yaml`: namespace
+- `deployment.yaml`: web deployment and media PVC
+- `service.yaml`: web service
+- `ingress.yaml`: ingress
+- `configmap.yaml`: non-sensitive runtime configuration
+- `SECRET_REQUIREMENTS.md`: required Secret keys without values
+- `hpa.yaml`: horizontal pod autoscaler
+- `celery-worker.yaml`: Celery worker and beat manifests
+- `redis.yaml`: Redis
 
-## Quick Deployment
+## Required Secret
+
+Create the `zreal-secrets` Secret before applying deployments:
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
+kubectl create secret generic zreal-secrets --namespace zreal ...
+```
+
+Use `SECRET_REQUIREMENTS.md` for the exact key list. Do not commit a Secret manifest containing credentials or placeholder values.
+
+## Apply
+
+```bash
 kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml          # Edit first!
 kubectl apply -f k8s/redis.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
@@ -28,21 +37,12 @@ kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/celery-worker.yaml
 ```
 
-## Recommendations for Production
+## Image
 
-- Use **managed databases** (Cloud SQL, RDS, AlloyDB) instead of in-cluster PostgreSQL
-- Use **object storage** (S3, GCS, Azure Blob) instead of PersistentVolume for media
-- Store secrets in **External Secrets Operator** or cloud secret managers
-- Use **cert-manager** for automatic TLS certificates
-- Consider using **Helm** for better management at scale
+CI publishes backend images to:
 
-## Image Tagging
-
-Update the image in `deployment.yaml` and `celery-worker.yaml`:
-```yaml
-image: your-registry/zreal:<commit-sha>
+```text
+ghcr.io/steeve-crypto/zreal
 ```
 
-## CI/CD Integration
-
-See `.github/workflows/` for GitHub Actions example.
+Use immutable commit SHA tags for production deploys.
