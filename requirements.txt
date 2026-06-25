@@ -6,6 +6,7 @@ stripe
 django-environ
 django-prometheus
 whitenoise
+django-cors-headers
 psycopg2-binary
 django-filter
 requests
@@ -14,9 +15,5 @@ pdfplumber
 pytesseract
 Pillow
 channels
-# For future Celery
 celery[redis]
 redis
-
-# Zcash specific (add more as needed)
-# python-bitcoinrpc or requests for RPC

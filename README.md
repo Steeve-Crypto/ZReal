@@ -1,6 +1,10 @@
 # ZReal
 
-ZReal is a Django application for privacy-oriented real estate tokenization workflows.
+ZReal is a privacy-oriented real estate tokenization system.
+
+The intended architecture is:
+- Django: backend, admin, database, auth, property/document/tokenization logic, ZSA integration boundary, tests
+- Next.js: product frontend for issuers and investors
 
 The app currently supports:
 - user signup/login through django-allauth
@@ -16,6 +20,8 @@ The app currently supports:
 - auditable ZSA tokenization attempts
 - safe document-to-tokenization metadata using document hashes, document types, timestamps, and selected structured fields
 - Stripe checkout integration when Stripe keys are configured
+- JSON API endpoints for the product frontend
+- a separate Next.js frontend scaffold in `frontend/`
 
 ZReal does **not** fake tokenization. ZSA issuance only runs when you configure a real external ZSA-capable backend/tool. If that backend is missing, the app records a failed tokenization attempt with a clear configuration error.
 
@@ -78,6 +84,8 @@ REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA=0
 
 ## Run
 
+Backend:
+
 ```bash
 py -3 manage.py migrate
 py -3 manage.py runserver 127.0.0.1:8000
@@ -89,12 +97,78 @@ Open:
 http://127.0.0.1:8000/
 ```
 
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:3000/
+```
+
 ## Test
+
+Backend:
 
 ```bash
 py -3 manage.py check
 py -3 manage.py test
 ```
+
+Frontend:
+
+```bash
+cd frontend
+npm run typecheck
+npm run build
+```
+
+## Frontend Authentication
+
+Local frontend development uses Django session authentication.
+
+1. Start Django at `http://127.0.0.1:8000`.
+2. Start Next.js at `http://127.0.0.1:3000`.
+3. Sign in through Django allauth at `http://127.0.0.1:8000/accounts/login/`.
+4. The frontend API client calls Django with `credentials: "include"`.
+
+The backend permits local frontend origins through `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`.
+
+Production must configure:
+- real `SECRET_KEY`
+- real `ALLOWED_HOSTS`
+- real frontend origin in `CORS_ALLOWED_ORIGINS`
+- real frontend origin in `CSRF_TRUSTED_ORIGINS`
+- secure cookies/HTTPS settings
+
+## API Endpoints
+
+Frontend-facing API endpoints are mounted under `/api/`:
+
+- `GET /api/health/`
+- `GET /api/me/`
+- `GET/PATCH /api/role/`
+- `GET /api/dashboard/issuer/`
+- `GET /api/dashboard/investor/`
+- `GET /api/setup/status/` staff only
+- `GET /api/properties/`
+- `GET /api/properties/browse/`
+- `POST /api/properties/new/`
+- `GET /api/properties/<id>/`
+- `PATCH/PUT /api/properties/<id>/edit/`
+- `GET /api/properties/<id>/documents/`
+- `POST /api/properties/<id>/documents/upload/`
+- `GET /api/zsa/config/`
+- `POST /api/properties/<id>/tokenize/`
+- `GET /api/tokenization/operations/<id>/`
+- `POST /api/tokenization/operations/<id>/refresh/`
+
+The API returns real database-backed data only. Empty states are represented as empty arrays or `null` values.
 
 ## Tokenization Flow
 
@@ -153,6 +227,8 @@ http://127.0.0.1:8000/setup/status/
 - local setup/status checklist
 - ZSA configuration validation endpoint
 - database-backed dashboards
+- frontend API layer
+- Next.js product frontend scaffold
 - investor tokenized-property browsing
 - property map
 - tokenization audit model

@@ -36,6 +36,7 @@ urlpatterns = [
     path('zsa/config/validate/', validate_zsa_configuration, name='zsa_config_validate'),
     path('zcash/zsa-config/validate/', validate_zsa_configuration, name='validate_zsa_configuration'),
     path('zcash/generate-sapling-address/', generate_sapling_address_view, name='generate_sapling_address'),
+    path('api/', include('zreal.api_urls')),
     path('', include('core.urls')),
     path('', include(router.urls)),  # API
     path('accounts/', include('allauth.urls')),  # Auth

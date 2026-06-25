@@ -454,3 +454,148 @@ class BillingConfigTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Stripe is not configured", response.json()["error"])
+
+
+class ProductApiTest(TestCase):
+    def test_issuer_dashboard_api_returns_real_property_metrics(self):
+        issuer = make_user("api_issuer_dashboard", "issuer")
+        make_property(issuer, title="Issuer API Property", estimated_value=Decimal("250000.00"))
+        client = Client()
+        client.login(username="api_issuer_dashboard", password="pass")
+
+        response = client.get("/api/dashboard/issuer/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["metrics"]["property_count"], 1)
+        self.assertEqual(data["metrics"]["total_estimated_value"], "250000")
+        self.assertEqual(data["properties"][0]["title"], "Issuer API Property")
+
+    def test_investor_dashboard_api_returns_real_holdings(self):
+        issuer = make_user("api_holdings_issuer", "issuer")
+        investor = make_user("api_holdings_investor", "investor")
+        prop = make_property(issuer, title="API Holding", estimated_value=Decimal("100000.00"), total_shares=100)
+        PropertyInvestment.objects.create(investor=investor, property=prop, shares_owned=25)
+        client = Client()
+        client.login(username="api_holdings_investor", password="pass")
+
+        response = client.get("/api/dashboard/investor/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["metrics"]["investment_count"], 1)
+        self.assertEqual(data["holdings"][0]["property"]["title"], "API Holding")
+        self.assertEqual(data["holdings"][0]["estimated_position_value"], "25000.00")
+
+    def test_property_api_hides_drafts_from_public_and_investors(self):
+        issuer = make_user("api_visibility_issuer", "issuer")
+        investor = make_user("api_visibility_investor", "investor")
+        draft = make_property(issuer, title="Hidden API Draft", status="draft")
+        tokenized = make_property(issuer, title="Visible API Property", status="tokenized", tokenization_status="confirmed")
+
+        public_response = Client().get("/api/properties/")
+        self.assertEqual(public_response.status_code, 200)
+        self.assertContains(public_response, tokenized.title)
+        self.assertNotContains(public_response, draft.title)
+
+        investor_client = Client()
+        investor_client.login(username="api_visibility_investor", password="pass")
+        investor_response = investor_client.get("/api/properties/")
+        self.assertEqual(investor_response.status_code, 200)
+        self.assertContains(investor_response, tokenized.title)
+        self.assertNotContains(investor_response, draft.title)
+
+    def test_issuer_property_api_shows_own_drafts(self):
+        issuer = make_user("api_own_draft_issuer", "issuer")
+        draft = make_property(issuer, title="Issuer API Draft", status="draft")
+        client = Client()
+        client.login(username="api_own_draft_issuer", password="pass")
+
+        response = client.get("/api/properties/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, draft.title)
+
+    def test_document_api_is_ownership_protected(self):
+        issuer = make_user("api_doc_issuer", "issuer")
+        other = make_user("api_doc_other", "issuer")
+        prop = make_property(issuer)
+        client = Client()
+        client.login(username="api_doc_other", password="pass")
+
+        response = client.get(f"/api/properties/{prop.pk}/documents/")
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(ZCASH_TX_TOOL_PATH="", ZCASH_RPC_URL="")
+    @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
+    def test_zsa_config_api_reports_missing_without_secrets(self, _which):
+        issuer = make_user("api_zsa_config_issuer", "issuer")
+        client = Client()
+        client.login(username="api_zsa_config_issuer", password="pass")
+
+        response = client.get("/api/zsa/config/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["ready"])
+        self.assertIn("ZCASH_RPC_URL", data["missing"])
+        self.assertNotIn("password", str(data).lower())
+
+    @override_settings(ZCASH_TX_TOOL_PATH="", ZCASH_RPC_URL="")
+    @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
+    def test_tokenization_api_missing_config_records_failed_operation(self, _which):
+        issuer = make_user("api_tokenize_issuer", "issuer")
+        prop = make_property(issuer)
+        client = Client()
+        client.login(username="api_tokenize_issuer", password="pass")
+
+        response = client.post(
+            f"/api/properties/{prop.pk}/tokenize/",
+            data={"issuer_zaddr": "ztestsapling1testaddress"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertEqual(data["status"], "failed")
+        self.assertIn("ZCASH_TX_TOOL_PATH", data["error"])
+        self.assertEqual(TokenizationOperation.objects.filter(property=prop).count(), 1)
+
+    def test_tokenization_operation_api_hides_raw_response_for_non_staff(self):
+        issuer = make_user("api_operation_issuer", "issuer")
+        prop = make_property(issuer)
+        operation = TokenizationOperation.objects.create(
+            property=prop,
+            issuer=issuer,
+            issuer_zaddr="ztestsapling1testaddress123456789",
+            asset_symbol="ZREAL-PROP-1",
+            total_shares=prop.total_shares,
+            backend="zcash_tx_tool",
+            status="failed",
+            operation_id="op-api-1",
+            response={"backend_debug": "staff-only"},
+        )
+        client = Client()
+        client.login(username="api_operation_issuer", password="pass")
+
+        response = client.get(f"/api/tokenization/operations/{operation.pk}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["operation_id"], "op-api-1")
+        self.assertFalse(data["can_view_raw_response"])
+        self.assertNotIn("raw_response", data)
+
+    def test_setup_status_api_is_staff_only_and_secret_safe(self):
+        staff = make_user("api_setup_staff", "issuer")
+        staff.is_staff = True
+        staff.save()
+        client = Client()
+        client.login(username="api_setup_staff", password="pass")
+
+        with override_settings(STRIPE_SECRET_KEY="sk_secret_value"):
+            response = client.get("/api/setup/status/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("sk_secret_value", str(response.json()))
