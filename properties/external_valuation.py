@@ -1,93 +1,64 @@
 """
-External Property Valuation Service
+External Property Valuation Service.
 
-This module is designed to be adaptable.
-You can easily swap the implementation to use different APIs:
-- RapidAPI Real Estate APIs
-- ATTOM Data
-- Zillow-like APIs (via partners)
-- Custom internal ML models
-- etc.
-
-Current implementation: Heuristic fallback + placeholder for external API.
+The service is intentionally conservative: if no external API is configured it
+returns a deterministic heuristic based on actual model fields, and it labels
+the source honestly.
 """
 
-import requests
 from decimal import Decimal
+
+import requests
 from django.conf import settings
 
 
 class ExternalValuationService:
-    """
-    Adaptable external valuation service.
-    """
-    
     def __init__(self):
         self.api_key = getattr(settings, 'VALUATION_API_KEY', None)
         self.api_url = getattr(settings, 'VALUATION_API_URL', None)
-    
+
     def get_valuation(self, property_obj):
-        """
-        Main method to get external valuation.
-        Falls back to heuristic if no API configured.
-        """
         if self.api_key and self.api_url:
-            return self._fetch_from_external_api(property_obj)
-        else:
-            # Fallback to local heuristic
-            return property_obj.calculate_valuation(method='heuristic')
-    
+            value = self._fetch_from_external_api(property_obj)
+            if value is not None:
+                return value
+        return self._heuristic(property_obj)
+
+    def _heuristic(self, property_obj):
+        if not property_obj.size_sqm:
+            return None
+        base_price = Decimal(str(property_obj.size_sqm)) * Decimal('2500')
+        bedroom_bonus = Decimal(property_obj.bedrooms or 0) * Decimal('15000')
+        bathroom_bonus = Decimal(property_obj.bathrooms or 0) * Decimal('10000')
+        estimated = base_price + bedroom_bonus + bathroom_bonus
+        property_obj.estimated_value = estimated
+        property_obj.save(update_fields=['estimated_value', 'updated_at'])
+        return estimated
+
     def _fetch_from_external_api(self, property_obj):
-        """
-        Example integration with an external real estate valuation API.
-        Replace this with actual API integration.
-        """
         try:
             payload = {
-                "address": property_obj.location,
+                "address": property_obj.address,
+                "latitude": float(property_obj.latitude) if property_obj.latitude is not None else None,
+                "longitude": float(property_obj.longitude) if property_obj.longitude is not None else None,
                 "size_sqm": float(property_obj.size_sqm) if property_obj.size_sqm else None,
-                "property_type": "residential",  # Can be extended
+                "bedrooms": property_obj.bedrooms,
+                "bathrooms": property_obj.bathrooms,
             }
-            
-            headers = {
-                "X-RapidAPI-Key": self.api_key,
-                "X-RapidAPI-Host": "example-real-estate-api.p.rapidapi.com"
-            }
-            
-            # This is a placeholder URL. Replace with real endpoint.
             response = requests.post(
-                f"{self.api_url}/valuate",
+                self.api_url,
                 json=payload,
-                headers=headers,
-                timeout=10
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=10,
             )
-            
-            if response.status_code == 200:
-                data = response.json()
-                estimated = Decimal(str(data.get('estimated_value', 0)))
-                
-                # Update property
-                property_obj.estimated_value = estimated
-                property_obj.valuation_method = 'external_api'
-                property_obj.valuation_confidence = data.get('confidence', 0.75)
-                property_obj.last_valued_at = timezone.now()
-                property_obj.valuation_notes = f"External API valuation. Source: {data.get('source', 'unknown')}"
-                property_obj.save()
-                
-                # Save history
-                from .models import PropertyValuationHistory
-                PropertyValuationHistory.objects.create(
-                    property=property_obj,
-                    estimated_value=estimated,
-                    valuation_method='external_api',
-                    confidence=property_obj.valuation_confidence,
-                    notes=property_obj.valuation_notes
-                )
-                
-                return estimated
-            
-        except Exception as e:
-            print(f"[Valuation] External API failed: {e}")
-        
-        # Fallback
-        return property_obj.calculate_valuation(method='heuristic')
+            response.raise_for_status()
+            data = response.json()
+            estimated = data.get('estimated_value')
+            if estimated is None:
+                return None
+            estimated = Decimal(str(estimated))
+            property_obj.estimated_value = estimated
+            property_obj.save(update_fields=['estimated_value', 'updated_at'])
+            return estimated
+        except Exception:
+            return None

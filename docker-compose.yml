@@ -22,14 +22,16 @@ services:
       - ZCASH_TX_TOOL_PATH=${ZCASH_TX_TOOL_PATH}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
-      - ZSA_ISSUANCE_STRATEGY=${ZSA_ISSUANCE_STRATEGY:-auto}
+      - ZSA_ISSUANCE_BACKEND=${ZSA_ISSUANCE_BACKEND:-zcash_tx_tool}
+      - ZCASH_ZSA_ISSUE_COMMAND=${ZCASH_ZSA_ISSUE_COMMAND}
+      - ZCASH_ZSA_STATUS_COMMAND=${ZCASH_ZSA_STATUS_COMMAND}
     depends_on:
       - db
       - redis
     restart: unless-stopped
 
   db:
-    image: postgis/postgis:15-3.3
+    image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:

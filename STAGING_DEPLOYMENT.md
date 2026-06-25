@@ -1,79 +1,42 @@
-# ZReal Staging Deployment Guide (Zcash Testnet)
+# ZReal Staging Deployment
 
-## Prerequisites
-- Zcash testnet node running (or use a reliable testnet provider)
-- Funded testnet shielded address for payouts
-- PostgreSQL + PostGIS
-- Redis
-- Docker / Kubernetes cluster (recommended)
+Staging requires the same configuration as local development plus a real database, HTTPS, media storage, and optional ZSA/Stripe integrations.
 
-## 1. Environment Setup
+## Minimum
 
-```bash
-# Clone and enter project
-git clone <your-repo>
-cd zreal
+- Python dependencies installed
+- `SECRET_KEY`
+- `DEBUG=0`
+- `ALLOWED_HOSTS`
+- `DATABASE_URL`
+- static/media storage plan
 
-# Copy environment
-cp .env.example .env
+## Optional Integrations
 
-# Edit .env with testnet values
-ZCASHTESTNET_RPC_URL=http://your-testnet-node:18232
-ZCASHTESTNET_RPC_USER=youruser
-ZCASHTESTNET_RPC_PASSWORD=yourpass
-VALUATION_API_KEY=optional
-```
+- `ZCASH_RPC_URL`
+- `ZCASH_TX_TOOL_PATH`
+- `ZCASH_ZSA_ISSUE_COMMAND`
+- `ZCASH_ZSA_STATUS_COMMAND`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_ISSUER_PRICE_ID`
+- `DJSTRIPE_WEBHOOK_SECRET`
 
-## 2. Database & Migrations
+## Deploy
 
 ```bash
+python manage.py check
 python manage.py migrate
-python manage.py createsuperuser
+python manage.py collectstatic --noinput
+gunicorn zreal.wsgi:application --bind 0.0.0.0:8000
 ```
 
-## 3. Run with Docker Compose (Recommended for Staging)
+## Staging Verification
 
-```bash
-docker-compose -f docker-compose.yml up -d --build
-```
+- create an account
+- choose issuer role
+- create a property
+- upload a document
+- attempt ZSA issuance with the configured testnet tool
+- verify success/failure is recorded in `TokenizationOperation`
 
-Key services:
-- `web` → Django + Gunicorn
-- `celery` → Background tasks (dividends, monitoring, re-valuation)
-- `redis`
-- `db` (PostGIS)
-
-## 4. Zcash Testnet Configuration
-
-- Use `zcash.conf` with `testnet=1`
-- Ensure `rpcallowip` and authentication are set
-- Fund a shielded address for dividend testing:
-  ```bash
-  zcash-cli z_getnewaddress
-  zcash-cli z_shieldcoinbase "*" your_zaddr
-  ```
-
-## 5. Run Dividend Payouts on Testnet
-
-```bash
-# Manual trigger
-python manage.py process_dividends --property-id 1
-
-# Or via Celery
-python manage.py process_dividends --async
-```
-
-## 6. Monitoring on Staging
-
-- Access Grafana at `http://your-staging:3000`
-- Check Falco alerts
-- Monitor Celery flower (if enabled)
-
-## 7. Testnet Best Practices
-
-- Use small amounts for testing
-- Monitor transaction confirmations
-- Test failure scenarios (invalid address, insufficient funds)
-- Keep testnet addresses documented
-
-**Next Step after Staging**: Full security audit + load testing before mainnet.
+Dividend payouts are not implemented yet and should not be staged as a working feature.

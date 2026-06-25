@@ -1,171 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZReal • Investor Portfolio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=Playfair+Display:wght@700&amp;display=swap');
-        
-        body {
-            font-family: 'Inter', system_ui, sans-serif;
-            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-            color: #E2E8F0;
-        }
-        
-        .glass {
-            background: rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .premium-card {
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .premium-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
-        }
-        
-        .section-header {
-            font-family: 'Playfair Display', Georgia, serif;
-            letter-spacing: -0.02em;
-        }
-        
-        .gold-accent {
-            color: #D4AF37;
-        }
-    </style>
-</head>
-<body class="min-h-screen">
-    <div class="max-w-7xl mx-auto px-8 py-12">
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-12">
-            <div>
-                <h1 class="section-header text-5xl font-bold tracking-tight">Investor Portfolio</h1>
-                <p class="text-white/60 mt-2">Private real estate yield on Zcash</p>
-            </div>
-            <div class="flex items-center gap-x-4">
-                <a href="/systems-map/" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
-                    <i class="fas fa-project-diagram text-[#D4AF37]"></i>
-                    <span>Systems Map</span>
-                </a>
-                <a href="/properties/map/" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
-                    <span>Browse Properties</span>
-                </a>
-            </div>
-        </div>
+{% extends "base.html" %}
+{% load static %}
 
-        <!-- Portfolio Summary -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div class="glass rounded-3xl p-8">
-                <div class="text-white/60 text-sm">Total Portfolio Value</div>
-                <div class="text-5xl font-semibold mt-2 tracking-tighter">$2.84M</div>
-                <div class="text-emerald-400 text-sm mt-1">↑ 4.2% this month</div>
-            </div>
-            <div class="glass rounded-3xl p-8">
-                <div class="text-white/60 text-sm">Annual Yield</div>
-                <div class="text-5xl font-semibold mt-2 tracking-tighter">8.7%</div>
-                <div class="text-emerald-400 text-sm mt-1">Shielded distributions</div>
-            </div>
-            <div class="glass rounded-3xl p-8">
-                <div class="text-white/60 text-sm">Properties Owned</div>
-                <div class="text-5xl font-semibold mt-2 tracking-tighter">7</div>
-                <div class="text-white/60 text-sm mt-1">Across 3 countries</div>
-            </div>
-        </div>
+{% block title %}ZReal | Investor Portfolio{% endblock %}
 
-        <!-- Holdings -->
-        <div class="mb-8">
-            <h2 class="text-2xl font-semibold mb-6">Your Holdings</h2>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="holdings-container">
-                <!-- Populated dynamically -->
-            </div>
-        </div>
-
-        <!-- Live Activity -->
+{% block content %}
+<main class="max-w-7xl mx-auto px-8 py-12">
+    <header class="flex flex-col gap-6 mb-12 lg:flex-row lg:items-center lg:justify-between">
         <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-semibold">Live Activity</h2>
-                <div class="text-emerald-400 text-sm flex items-center gap-x-2">
-                    <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                    Real-time
-                </div>
-            </div>
-            <div id="investor-activity-feed" class="glass rounded-3xl p-6 space-y-4 max-h-96 overflow-y-auto">
-                <!-- Populated by WebSocket -->
-            </div>
+            <h1 class="section-header text-5xl font-bold tracking-tight">Investor Portfolio</h1>
+            <p class="text-white/60 mt-2">Private real estate positions on Zcash</p>
         </div>
-    </div>
+        <div class="flex items-center gap-x-4">
+            <a href="{% url 'choose_role' %}" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
+                <i class="fas fa-user-gear text-[#D4AF37]"></i>
+                <span>Change Role</span>
+            </a>
+            <a href="{% url 'investor_property_browse' %}" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
+                <i class="fas fa-building text-[#D4AF37]"></i>
+                <span>Browse Properties</span>
+            </a>
+        </div>
+    </header>
 
-    <script>
-        // Sample holdings for demo
-        function renderHoldings() {
-            const container = document.getElementById('holdings-container');
-            const holdings = [
-                { title: "Luxury Waterfront Villa", shares: "1240", total: "10000", value: "1.24M", yield: "8.2%" },
-                { title: "Downtown Apartment Complex", shares: "850", total: "5000", value: "0.85M", yield: "9.1%" },
-                { title: "Mountain Resort Property", shares: "320", total: "8000", value: "0.75M", yield: "7.8%" },
-            ];
-            
-            let html = '';
-            holdings.forEach(holding => {
-                html += `
-                    <div class="glass rounded-3xl p-6 premium-card">
-                        <h3 class="font-semibold text-lg">${holding.title}</h3>
-                        <div class="mt-4 flex justify-between text-sm">
-                            <div>
-                                <div class="text-white/60">Shares Owned</div>
-                                <div class="font-mono text-xl">${holding.shares}</div>
-                            </div>
-                            <div class="text-right">
-                                <div class="text-white/60">Est. Value</div>
-                                <div class="font-mono text-xl text-emerald-400">$${holding.value}</div>
-                            </div>
-                        </div>
-                        <div class="h-1.5 bg-white/10 rounded-full mt-6 overflow-hidden">
-                            <div class="h-1.5 bg-[#D4AF37] rounded-full" style="width: ${parseInt(holding.shares) / parseInt(holding.total) * 100}%"></div>
-                        </div>
-                        <div class="text-xs text-white/50 mt-1 flex justify-between">
-                            <span>Yield: ${holding.yield}</span>
-                            <span>Private on Zcash</span>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-        }
-        
-        // Render activity feed
-        function renderActivityFeed() {
-            const container = document.getElementById('investor-activity-feed');
-            container.innerHTML = `
-                <div class="flex items-start gap-x-3 p-3 rounded-2xl bg-white/5">
-                    <i class="fas fa-coins text-[#D4AF37] mt-0.5"></i>
-                    <div>
-                        <div class="text-sm">ZSA distribution received for Luxury Waterfront Villa</div>
-                        <div class="text-xs text-white/50 mt-1">2 hours ago • $12,450 shielded</div>
-                    </div>
-                </div>
-                <div class="flex items-start gap-x-3 p-3 rounded-2xl bg-white/5">
-                    <i class="fas fa-file-upload text-purple-400 mt-0.5"></i>
-                    <div>
-                        <div class="text-sm">New document uploaded to Legal Shield for Downtown Apartment Complex</div>
-                        <div class="text-xs text-white/50 mt-1">Yesterday</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Initialize
-        window.onload = function() {
-            renderHoldings();
-            renderActivityFeed();
-        };
-    </script>
-</body>
-</html>
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        {% include "core/partials/stat_card.html" with label="Total Portfolio Value" value=total_portfolio_value_display icon="fas fa-wallet" icon_class="text-emerald-400/70" detail="Based on estimated property values" %}
+        {% include "core/partials/stat_card.html" with label="Holdings" value=investment_count icon="fas fa-layer-group" icon_class="text-[#D4AF37]/70" %}
+        {% include "core/partials/stat_card.html" with label="Available Properties" value=available_property_count icon="fas fa-building" icon_class="text-white/30" %}
+    </section>
+
+    <section class="mb-10">
+        <h2 class="text-2xl font-semibold mb-6">Your Holdings</h2>
+        {% if holdings %}
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for holding in holdings %}
+                    {% include "core/partials/investment_card.html" %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="glass rounded-3xl p-8 text-center text-white/60">
+                <i class="fas fa-layer-group text-5xl text-white/20 mb-4"></i>
+                <p>No investments yet.</p>
+            </div>
+        {% endif %}
+    </section>
+
+    <section>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-semibold">Activity</h2>
+            <span class="text-sm text-white/50">No data yet</span>
+        </div>
+        <div id="investor-activity-feed" class="glass rounded-3xl p-6 space-y-4 max-h-96 overflow-y-auto"></div>
+    </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/investor_portfolio.js' %}"></script>
+{% endblock %}

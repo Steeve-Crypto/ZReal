@@ -1,0 +1,133 @@
+<div class="property-card flex flex-col gap-4 p-5 hover:bg-white/5 rounded-3xl transition-all group md:flex-row md:items-center md:justify-between">
+    <div class="flex items-center gap-x-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl flex items-center justify-center border border-white/10">
+            <i class="fas fa-home text-2xl text-white/60"></i>
+        </div>
+        <div>
+            <div class="font-semibold text-lg">{{ prop.title }}</div>
+            <div class="text-sm text-white/60">{{ prop.address }}</div>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-4 md:justify-end">
+        <div class="md:text-right">
+            <div class="font-mono text-sm text-white/80">{{ prop.size_sqm|floatformat:0 }} sqm</div>
+            <div class="text-xs text-white/50">Est. {{ prop.estimated_value|default:"No data yet" }}</div>
+        </div>
+
+        {% if prop.status == 'tokenized' or prop.status == 'active' %}
+            <span class="status-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Tokenized</span>
+        {% elif prop.status == 'tokenizing' %}
+            <span class="status-badge bg-amber-500/10 text-amber-400 border border-amber-500/30">Tokenizing</span>
+        {% else %}
+            <span class="status-badge bg-white/10 text-white/70 border border-white/20">Draft</span>
+        {% endif %}
+
+        <button type="button"
+                class="px-4 py-2 text-sm font-medium rounded-3xl bg-white/5 hover:bg-white/10 border border-white/20 transition-all"
+                data-action="open-legal-shield"
+                data-property-id="{{ prop.pk }}"
+                data-property-title="{{ prop.title }}">
+            <i class="fas fa-file-upload mr-2 text-[#D4AF37]"></i>
+            Legal Shield
+        </button>
+
+        <a href="{% url 'property_edit' prop.pk %}" class="px-4 py-2 text-sm font-medium rounded-3xl bg-white/5 hover:bg-white/10 border border-white/20 transition-all">
+            Edit
+        </a>
+    </div>
+
+    <div class="w-full rounded-2xl border border-white/10 bg-white/5 p-4">
+        {% with op=prop.tokenization_operations.first %}
+            <div class="grid gap-3 text-xs md:grid-cols-3">
+                <div>
+                    <div class="text-white/40">Tokenization Status</div>
+                    <div class="font-semibold {% if prop.tokenization_status == 'failed' %}text-red-300{% elif prop.tokenization_status == 'confirmed' %}text-emerald-300{% elif prop.tokenization_status == 'pending' or prop.tokenization_status == 'broadcast' %}text-amber-300{% else %}text-white/80{% endif %}">
+                        {{ prop.get_tokenization_status_display }}
+                    </div>
+                </div>
+                <div>
+                    <div class="text-white/40">Method</div>
+                    <div>{{ op.backend|default:zsa_backend }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Asset Symbol</div>
+                    <div>{{ op.asset_symbol|default:"Not assigned yet" }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Total Shares</div>
+                    <div>{{ prop.total_shares }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Operation ID</div>
+                    <div class="font-mono break-all">
+                        {% if op %}
+                            <a href="{% url 'tokenization_operation_detail' op.pk %}" class="text-[#D4AF37] hover:text-[#f0d471]">{{ op.operation_id|default:"View operation" }}</a>
+                        {% else %}
+                            No data yet
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div class="text-white/40">Transaction ID</div>
+                    <div class="font-mono break-all">{{ op.txid|default:"No data yet" }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Asset ID</div>
+                    <div class="font-mono break-all">{{ op.asset_id|default:prop.zsa_asset_id|default:"No data yet" }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Last Refresh</div>
+                    <div>{{ op.last_status_refreshed_at|default:"No data yet" }}</div>
+                </div>
+                <div>
+                    <div class="text-white/40">Metadata Attached</div>
+                    <div>
+                        {% if op.metadata.documents %}
+                            {{ op.metadata.documents|length }} document record(s), safe fields only
+                        {% elif op %}
+                            No document metadata attached
+                        {% else %}
+                            Prepared at tokenization time
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if prop.tokenization_error or op.error %}
+                <p class="mt-3 text-xs text-red-300">{{ prop.tokenization_error|default:op.error }}</p>
+            {% endif %}
+
+            <div class="mt-4">
+                {% if prop.tokenization_status == 'pending' or prop.tokenization_status == 'broadcast' %}
+                    <form method="post" action="{% url 'refresh_zsa_status' prop.pk %}" class="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
+                        {% csrf_token %}
+                        <span class="text-xs text-amber-300">Next action: refresh backend status</span>
+                        <button type="submit" class="px-4 py-2 text-sm rounded-3xl border border-white/20 hover:bg-white/10">
+                            Refresh Status
+                        </button>
+                    </form>
+                {% elif prop.tokenization_status == 'confirmed' %}
+                    <p class="text-xs text-emerald-300 md:text-right">Next action: property can be made available to investors when legal/compliance checks are complete.</p>
+                {% elif not zsa_config.ready %}
+                    <div class="text-xs text-amber-300 md:text-right">
+                        <p>ZSA configuration is not ready. Resolve the missing backend values before issuing.</p>
+                        {% if zsa_config.missing %}
+                            <p class="mt-1 text-white/50">{{ zsa_config.missing|join:", " }}</p>
+                        {% endif %}
+                    </div>
+                {% elif can_issue_zsa %}
+                    <form method="post" action="{% url 'issue_zsa' prop.pk %}" class="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
+                        {% csrf_token %}
+                        <input type="text" name="issuer_zaddr" placeholder="Issuer shielded address" class="md:w-72">
+                        <button type="submit" class="px-5 py-2 text-sm font-medium rounded-3xl bg-white/5 hover:bg-[#D4AF37] hover:text-[#0F172A] border border-white/20 transition-all">
+                            Issue ZSA
+                        </button>
+                    </form>
+                {% else %}
+                    <p class="text-xs text-amber-300 md:text-right">Active issuer subscription required for ZSA issuance.</p>
+                {% endif %}
+            </div>
+        {% endwith %}
+    </div>
+</div>

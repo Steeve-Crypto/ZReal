@@ -1,140 +1,169 @@
-# ZReal - Zcash Real Estate RWA Tokenization Platform
+# ZReal
 
-**Private fractional ownership of real estate on Zcash using Shielded Assets (ZSA).**
+ZReal is a Django application for privacy-oriented real estate tokenization workflows.
 
-Built with Python Django + PostGIS + Leaflet maps + Zcash RPC integration.
+The app currently supports:
+- user signup/login through django-allauth
+- role selection: investor or issuer
+- staff-only local setup/status checklist
+- issuer-facing ZSA configuration validation
+- issuer dashboards backed by real database values
+- issuer property create/edit flows
+- document upload and text extraction for issuer-owned properties
+- tokenization operation detail/history pages
+- investor browse page that shows only tokenized or active properties
+- property map using stored latitude/longitude; public/investor views show tokenized or active properties, issuers also see their own drafts
+- auditable ZSA tokenization attempts
+- safe document-to-tokenization metadata using document hashes, document types, timestamps, and selected structured fields
+- Stripe checkout integration when Stripe keys are configured
 
-## Vision & Revenue Model
-- **Solve**: Illiquidity + privacy issues in real estate investment.
-- **How**: Issuers tokenize properties as Zcash Shielded Assets (private tokens). Investors buy fractional shares with shielded ZEC. Rental income distributed privately.
-- **Revenue**: SaaS subscriptions for issuers ($199–999/mo + success fees), premium investor tools, API access, compliance add-ons.
-- **Differentiation**: Full zk-privacy on Zcash vs transparent chains.
+ZReal does **not** fake tokenization. ZSA issuance only runs when you configure a real external ZSA-capable backend/tool. If that backend is missing, the app records a failed tokenization attempt with a clear configuration error.
 
-## Current Status (Advanced Production-Ready MVP)
+## Install
 
-ZReal has evolved into a **feature-rich, privacy-first real estate RWA platform** with:
-
-### Core Features
-- **Zcash Shielded Assets (ZSA)** support with `zcash_tx_tool` integration
-- **Legal Shield** — Document intelligence using pdfplumber + OCR
-- Automatic enrichment of ZSA metadata from uploaded legal documents
-- Role-based access (Issuer vs Investor dashboards)
-- Stripe subscription billing for issuers
-- Premium glassmorphism UI with futuristic design
-- Interactive geospatial maps (Folium + OSMnx)
-- Visual timeline of documents + ZSA events per property
-- One-click CSV export of Legal Shield reports
-- Dynamic ZSA strategy configuration via Admin
-- Management command to backfill metadata on existing properties
-
-### Technical Foundation
-- Full Docker + docker-compose setup (Web, PostgreSQL + PostGIS, Redis, Celery)
-- Kubernetes manifests (Deployment, Service, Ingress, HPA, Celery, Redis)
-- GitHub Actions CI/CD pipeline
-- Production settings with `django-environ` + Whitenoise
-- Comprehensive test suite for critical flows
-- Health check endpoint ready for orchestration
-
-## Tech Stack
-- Django 5 + DRF
-- PostgreSQL + PostGIS (GeoDjango)
-- Leaflet.js (Google Maps alternative - free & open)
-- Zcash (zcashd RPC via Python)
-- Celery (future async/ZSA jobs)
-- Stripe (future billing)
-
-## Quick Start (Local)
-
-### 1. Prerequisites
-- Python 3.11+
-- PostgreSQL 15+ with PostGIS extension
-- Running zcashd node (testnet recommended first) or access to RPC
-- Git
-
-### 2. Setup Database
 ```bash
-sudo -u postgres psql
-CREATE DATABASE zreal;
-CREATE USER zrealuser WITH PASSWORD 'yourpassword';
-ALTER ROLE zrealuser SET client_encoding TO 'utf8';
-ALTER ROLE zrealuser SET default_transaction_isolation TO 'read committed';
-ALTER ROLE zrealuser SET timezone TO 'UTC';
-GRANT ALL PRIVILEGES ON DATABASE zreal TO zrealuser;
-\c zreal
-CREATE EXTENSION postgis;
+py -3 -m pip install -r requirements.txt
 ```
 
-### 3. Install & Run
+Optional but recommended:
+
 ```bash
-cd /path/to/zreal
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Edit zreal/settings.py with your DB credentials and ZCASH_RPC_URL
-
-python manage.py makemigrations
-python manage.py migrate
-python manage.py createsuperuser
-
-python manage.py runserver
+copy .env.example .env
 ```
 
-Visit http://127.0.0.1:8000/admin/ and http://127.0.0.1:8000/properties/map/
+Local development defaults to SQLite if `DATABASE_URL` is not set.
 
-### 4. Zcash Setup (Testnet First)
-1. Run zcashd on testnet.
-2. Get RPC credentials.
-3. Set in settings.py: ZCASH_RPC_URL = "http://user:pass@localhost:18232"
+## Configure
 
-Example shielded tx via Django view coming soon.
+Minimum local config:
 
-## Project Structure
-```
-zreal/
-├── zreal/                  # Project settings
-├── properties/             # Core real estate models, views, maps
-├── core/                   # Users, billing, common
-├── zcash_integration/      # Zcash RPC client + ZSA logic
-├── ai_valuation/           # ML price prediction
-├── templates/              # HTML + Leaflet map
-├── static/                 # CSS/JS
-├── manage.py
-├── requirements.txt
-└── README.md
+```env
+SECRET_KEY=change-me
+DEBUG=1
+ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
-## Key Features Implemented in Starter
-- Property model with PointField + PolygonField (PostGIS)
-- Interactive property map (Leaflet + OSM)
-- Basic property list/create API + views
-- Zcash RPC wrapper (z_sendmany example for shielded transfers)
-- Placeholder for ZSA issuance (update when full RPC available)
-- Simple AI valuation endpoint stub
-- Admin customization ready for geospatial
+For real Zcash/ZSA issuance, configure:
 
-## Next Development Priorities (Revenue-Focused)
-1. Full ZSA issuance flow (mint property shares as shielded asset)
-2. User authentication + roles (issuer vs investor)
-3. Stripe subscription integration
-4. Investor portfolio dashboard with private balance viewing
-5. Rental distribution simulation via shielded tx
-6. KYC/Compliance module
-7. Production deployment (Docker + VPS with zcashd)
+```env
+ZCASH_NETWORK=testnet
+ZCASH_RPC_URL=http://rpcuser:rpcpassword@127.0.0.1:18232
+ZSA_ISSUANCE_BACKEND=zcash_tx_tool
+ZCASH_TX_TOOL_PATH=C:\path\to\zcash_tx_tool.exe
+ZCASH_ZSA_ISSUE_COMMAND={tool} create-zsa-issuance --from {issuer_zaddr} --asset-symbol {asset_symbol} --total-shares {total_shares} --network {network}
+ZCASH_ZSA_STATUS_COMMAND={tool} status --operation-id {operation_id} --network {network}
+```
 
-## Zcash / ZSA Integration Notes
-- Use `zcash_integration/zcash_client.py` for all RPC calls.
-- For ZSA: Monitor ZIP 227 / NU7. Current code uses z_sendmany + memo for metadata. Full custom asset support via protocol tools or updated zcashd RPC.
-- Privacy first: All sensitive ops use shielded addresses where possible.
+The issue/status commands must print a JSON object. Issuance output must include at least one of:
 
-## Legal / Compliance Warning
-Real estate tokenization involves securities laws. This platform provides the technical layer. Always use proper legal SPVs and consult lawyers for KYC/AML/accreditation. ZSA issuance must comply with applicable regulations.
+```json
+{
+  "status": "pending|broadcast|confirmed",
+  "operation_id": "...",
+  "txid": "...",
+  "asset_id": "..."
+}
+```
 
-## Contributing & Roadmap
-This is the foundation. Let's iterate fast toward a revenue-generating MVP.
+Safe tokenization metadata is stored with the operation and passed to the command in `ZREAL_ZSA_METADATA_JSON`. The command template may also reference `{metadata_json}` if your tool expects metadata as an argument. ZReal includes document hashes and selected structured fields, not full legal document text.
 
-Built for programmers who want to ship complex, monetizable Web3 + real-world software.
+Stripe checkout is optional. Configure it only if you want billing:
 
----
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_ISSUER_PRICE_ID=price_...
+DJSTRIPE_WEBHOOK_SECRET=whsec_...
+REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA=0
+```
 
-**Let's build the future of private real estate.** Start with the code below and expand.
+## Run
+
+```bash
+py -3 manage.py migrate
+py -3 manage.py runserver 127.0.0.1:8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/
+```
+
+## Test
+
+```bash
+py -3 manage.py check
+py -3 manage.py test
+```
+
+## Tokenization Flow
+
+1. User signs in.
+2. User chooses the issuer role.
+3. Issuer creates a property.
+4. Issuer uploads legal/property documents.
+5. ZReal stores the document and its SHA-256 hash, then extracts local structured metadata.
+6. Issuer checks ZSA readiness on the dashboard or via `/zcash/zsa-config/validate/`.
+7. If configuration is missing, ZReal blocks blind issuance in the dashboard and reports the missing values.
+8. If configuration is ready, issuer enters a shielded issuer address and submits `Issue ZSA`.
+9. ZReal creates a `TokenizationOperation` audit record.
+10. ZReal attaches safe metadata: property ID, asset symbol, total shares, document types, document SHA-256 hashes, timestamps, and selected non-text extracted fields.
+11. ZReal calls the configured ZSA backend command.
+12. ZReal stores real returned `operation_id`, `txid`, `asset_id`, status, and errors.
+13. Pending operations can be refreshed from the dashboard or operation detail page.
+
+No private keys should be stored in ZReal. The external ZSA backend/tool is responsible for signing and broadcasting.
+
+## Manual QA Script
+
+1. Install dependencies: `py -3 -m pip install -r requirements.txt`.
+2. Run migrations: `py -3 manage.py migrate`.
+3. Start the server: `py -3 manage.py runserver 127.0.0.1:8000`.
+4. Open `http://127.0.0.1:8000/accounts/signup/`.
+5. Create an account with your own email and password.
+6. Choose the issuer role at `http://127.0.0.1:8000/profile/role/`.
+7. Open `http://127.0.0.1:8000/issuer/dashboard/`.
+8. Create a property using real property information you are authorized to use.
+9. Upload a real legal/property document through Legal Shield.
+10. Confirm the upload response shows extracted safe fields and the document hash exists in Django admin or the database.
+11. Attempt tokenization only after the dashboard reports ZSA readiness. Without config, the UI should explain the missing values instead of offering a blind issue button.
+12. Open `http://127.0.0.1:8000/zcash/zsa-config/validate/` while logged in as issuer to inspect structured validation JSON.
+13. Configure the ZSA environment variables listed above, restart the server, and re-open the validation endpoint.
+14. Submit tokenization with a real issuer shielded address.
+15. Open the tokenization operation detail link from the dashboard.
+16. Refresh status from the operation detail page.
+17. Confirm operation history shows real operation IDs, txids, asset IDs, statuses, timestamps, and any backend errors.
+18. Create or log into an investor account and open `http://127.0.0.1:8000/properties/browse/`.
+19. Confirm no draft properties are shown. If no real tokenized properties exist, the page should say: `No tokenized properties are available yet.`
+
+For the staff-only local setup checklist, create or use a staff/superuser account and open:
+
+```text
+http://127.0.0.1:8000/setup/status/
+```
+
+## Implemented
+
+- Django app boot and routing
+- SQLite local development
+- auth and role selection
+- issuer property management
+- ownership-protected document upload
+- PDF/image text extraction path
+- local setup/status checklist
+- ZSA configuration validation endpoint
+- database-backed dashboards
+- investor tokenized-property browsing
+- property map
+- tokenization audit model
+- tokenization operation detail/status refresh pages
+- real external ZSA tool integration boundary
+- tests for document upload, tokenization success/failure/status refresh, permissions, investor holdings, and Stripe missing configuration
+
+## Pending
+
+- a real native ZSA backend/tool must be supplied and configured
+- richer investor purchase flow
+- real rental/dividend distribution model
+- production hardening for KYC/AML and securities compliance
+- viewing keys are not currently stored; add encrypted custody/read-only access if that feature is needed

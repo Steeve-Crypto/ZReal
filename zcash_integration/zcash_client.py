@@ -1,307 +1,356 @@
 """
-Zcash RPC Client for ZReal
-Handles transparent + shielded transactions.
-Ready for Zcash Shielded Assets (ZSA) when full RPC support lands.
+Zcash/ZSA integration boundary for ZReal.
+
+ZReal does not fake ZSA issuance. The issuance path requires a configured
+external ZSA-capable tool and stores only the IDs returned by that tool.
 """
 
-import requests
 import json
 import os
+import re
+import shlex
+import shutil
+import string
+import subprocess
+
+import requests
 from django.conf import settings
 
+
+class ZcashConfigurationError(RuntimeError):
+    pass
+
+
+class ZcashToolOutputError(RuntimeError):
+    pass
+
+
 class ZcashClient:
+    ALLOWED_BACKENDS = {"zcash_tx_tool"}
+    ALLOWED_STATUSES = {"pending", "broadcast", "confirmed", "failed"}
+    ISSUE_REQUIRED_FIELDS = {"tool", "issuer_zaddr", "asset_symbol", "total_shares"}
+    STATUS_REQUIRED_FIELDS = {"tool", "operation_id"}
+    TEMPLATE_FIELDS = {
+        "tool",
+        "issuer_zaddr",
+        "asset_symbol",
+        "total_shares",
+        "network",
+        "metadata_json",
+        "metadata_file",
+        "operation_id",
+    }
+
     def __init__(self):
         self.rpc_url = settings.ZCASH_RPC_URL
+        self.network = settings.ZCASH_NETWORK
         self.session = requests.Session()
 
     def _call(self, method, params=None):
+        if not self.rpc_url:
+            raise ZcashConfigurationError(
+                "ZCASH_RPC_URL is not configured. Set ZCASH_RPC_URL or ZCASHRPC_USER/"
+                "ZCASHRPC_PASSWORD/ZCASHRPC_HOST in .env."
+            )
+
         payload = {
             "jsonrpc": "1.0",
             "id": "zreal",
             "method": method,
-            "params": params or []
+            "params": params or [],
         }
-        try:
-            response = self.session.post(self.rpc_url, json=payload, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            return {"error": str(e)}
+        response = self.session.post(self.rpc_url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("error"):
+            raise RuntimeError(data["error"])
+        return data.get("result")
 
     def get_blockchain_info(self):
         return self._call("getblockchaininfo")
 
-    def get_balance(self, address=None):
-        """Get balance. For shielded, use z_getbalance or viewing keys."""
-        if address:
-            return self._call("z_getbalance", [address])
-        return self._call("getbalance")
+    def _validate_shielded_address_shape(self, address):
+        if not address:
+            raise ValueError("Issuer shielded address is required.")
+        if any(ch.isspace() for ch in address):
+            raise ValueError("Issuer shielded address must not contain whitespace.")
+        if not re.fullmatch(r"[A-Za-z0-9]+", address):
+            raise ValueError("Issuer shielded address contains unsupported characters.")
+        if not address.startswith(("z", "u")):
+            raise ValueError("Issuer address must be a shielded Sapling or Unified address.")
+        if len(address) < 20:
+            raise ValueError("Issuer shielded address is too short.")
 
-    def z_sendmany(self, fromaddress, amounts, minconf=1, fee=0.0001, privacyPolicy="AllowFullyShielded"):
-        """
-        Send shielded or mixed transaction.
-        amounts: list of {"address": "...", "amount": 0.1, "memo": "optional json"}
-        """
-        params = [fromaddress, amounts, minconf, fee, privacyPolicy]
-        return self._call("z_sendmany", params)
-
-    def issue_zsa_placeholder(self, property_id, total_shares, issuer_zaddr, memo_data=None):
-        """
-        Placeholder for Zcash Shielded Asset issuance.
-        In production (post full ZSA activation): Use dedicated ZSA mint RPC or zcash_tx_tool.
-        Currently uses z_sendmany with rich memo containing asset metadata.
-        """
-        memo = json.dumps({
-            "type": "zsa_issuance",
-            "property_id": property_id,
-            "total_shares": total_shares,
-            "asset_name": f"ZReal-Property-{property_id}",
-            **(memo_data or {})
-        })
-        
-        # Example: Send 0 value tx with memo to self or designated address
-        amounts = [{
-            "address": issuer_zaddr,
-            "amount": 0.0001,  # Small fee amount
-            "memo": memo
-        }]
-        
-        return self.z_sendmany(issuer_zaddr, amounts, privacyPolicy="AllowFullyShielded")
-
-    def get_zsa_balance_placeholder(self, zaddr):
-        """Future: Proper ZSA balance query via viewing key or new RPC."""
-        return self._call("z_getbalance", [zaddr])
-
-    # ==================== FULL ZSA ISSUANCE + SHIELDED DISTRIBUTION ====================
-
-    def create_zsa_issuance_tx(self, issuer_zaddr: str, property_id: int, total_shares: int, 
-                               asset_symbol: str = None, memo_extra: dict = None, 
-                               use_tx_tool: bool = True):
-        """
-        Creates a shielded transaction that represents ZSA issuance.
-        
-        Enhanced in 2026 with optional zcash_tx_tool support for more robust ZSA flows.
-        
-        use_tx_tool=True (default): Attempts to use QED-it/zcash_tx_tool for advanced issuance.
-        Falls back to rich-memo RPC method if tool unavailable or fails.
-        """
-        if use_tx_tool:
-            return self.create_zsa_issuance_with_tx_tool(issuer_zaddr, property_id, total_shares, asset_symbol)
-        
-        # Original rich-memo fallback
-        asset_symbol = asset_symbol or f"ZREAL-PROP-{property_id}"
-        
-        memo_data = {
-            "action": "zsa_issuance",
-            "property_id": property_id,
-            "total_shares": total_shares,
-            "asset_symbol": asset_symbol,
-            "issued_by": issuer_zaddr,
-            "timestamp": timezone.now().isoformat(),
-            **(memo_extra or {})
-        }
-        
-        memo = json.dumps(memo_data)
-        
-        amounts = [{
-            "address": issuer_zaddr,
-            "amount": 0.00001,
-            "memo": memo
-        }]
-        
-        tx_result = self.z_sendmany(
-            fromaddress=issuer_zaddr,
-            amounts=amounts,
-            privacyPolicy="AllowFullyShielded"
-        )
-        
-        return {
-            "tx_result": tx_result,
-            "memo_data": memo_data,
-            "note": "ZSA record created via rich memo (fallback). Consider installing zcash_tx_tool for advanced flows."
-        }
-
-    def distribute_shielded_payments(self, from_zaddr: str, recipients: list, 
-                                     memo_base: dict = None):
-        """
-        Shielded distribution flow (e.g. rental income, dividends to ZSA holders).
-        
-        recipients: list of dicts -> [{"zaddr": "...", "amount": 0.05, "investor_id": 123}, ...]
-        
-        Returns list of tx results. All transfers are fully shielded.
-        """
-        results = []
-        
-        for recipient in recipients:
-            memo_data = {
-                "action": "zsa_distribution",
-                "property_id": memo_base.get("property_id") if memo_base else None,
-                "investor_id": recipient.get("investor_id"),
-                "shares": recipient.get("shares"),
-                **(memo_base or {})
+    def validate_address(self, address):
+        self._validate_shielded_address_shape(address)
+        if not self.rpc_url:
+            return {
+                "isvalid": True,
+                "warning": "Address was shape-checked only because ZCASH_RPC_URL is not configured.",
             }
-            
-            amounts = [{
-                "address": recipient["zaddr"],
-                "amount": recipient["amount"],
-                "memo": json.dumps(memo_data)
-            }]
-            
-            tx = self.z_sendmany(
-                fromaddress=from_zaddr,
-                amounts=amounts,
-                privacyPolicy="AllowFullyShielded"
+        result = self._call("z_validateaddress", [address])
+        if not result.get("isvalid"):
+            raise ValueError(f"Invalid issuer shielded address: {result}")
+        return result
+
+    def _tx_tool_path(self):
+        configured = settings.ZCASH_TX_TOOL_PATH
+        if configured:
+            return configured
+        return shutil.which("zcash_tx_tool")
+
+    def _template_fields(self, template):
+        return {
+            field_name
+            for _, field_name, _, _ in string.Formatter().parse(template or "")
+            if field_name
+        }
+
+    def _validate_template_for_report(self, template, required_fields, purpose):
+        missing = []
+        warnings = []
+        if not template:
+            missing.append(f"{purpose} command template")
+            return missing, warnings
+
+        fields = self._template_fields(template)
+        unknown = fields - self.TEMPLATE_FIELDS
+        missing_fields = required_fields - fields
+        if unknown:
+            warnings.append(
+                f"{purpose} command template contains unsupported placeholder(s): {', '.join(sorted(unknown))}."
             )
-            
-            results.append({
-                "recipient_zaddr": recipient["zaddr"],
-                "amount": recipient["amount"],
-                "tx_result": tx
-            })
-        
-        return results
+        if missing_fields:
+            missing.append(
+                f"{purpose} command placeholder(s): {', '.join(sorted(missing_fields))}"
+            )
+        return missing, warnings
 
-    def get_shielded_tx_details(self, txid: str):
-        """Fetch details of a shielded transaction (for confirmation)."""
-        return self._call("getrawtransaction", [txid, 1])
+    def configuration_report(self):
+        """Return a safe, non-secret ZSA configuration report without issuing tokens."""
+        backend = settings.ZSA_ISSUANCE_BACKEND
+        tool = self._tx_tool_path()
+        missing = []
+        warnings = []
 
-    # ==================== ZSA ISSUANCE STRATEGY (Adaptable for Native ZSA) ====================
-    #
-    # ZReal uses a strategy-based approach for ZSA issuance to remain adaptable.
-    #
-    # Current strategies:
-    #   1. zcash_tx_tool (preferred when available)
-    #   2. Rich memo via z_sendmany (reliable fallback)
-    #
-    # Future strategy (when native ZSA is fully activated on mainnet):
-    #   3. Direct native OrchardZSA issuance via new RPC methods
-    #
-    # This structure minimizes future refactoring.
+        if backend not in self.ALLOWED_BACKENDS:
+            missing.append("supported ZSA_ISSUANCE_BACKEND")
+            warnings.append(
+                f"Unsupported ZSA_ISSUANCE_BACKEND '{backend}'. Supported: {', '.join(sorted(self.ALLOWED_BACKENDS))}."
+            )
 
-    def _get_tx_tool_path(self):
-        """Returns path to zcash_tx_tool binary if available."""
-        import shutil
-        tool_path = os.environ.get('ZCASH_TX_TOOL_PATH', shutil.which('zcash_tx_tool'))
-        if tool_path and os.path.exists(tool_path):
-            return tool_path
-        return None
+        if not self.network:
+            missing.append("ZCASH_NETWORK")
 
-    def create_zsa_issuance_with_tx_tool(self, issuer_zaddr: str, property_id: int, total_shares: int, 
-                                         asset_symbol: str = None):
-        """
-        Enhanced ZSA issuance using zcash_tx_tool (recommended for production ZSA).
-        
-        Falls back to rich-memo RPC method if tool is not available.
-        
-        Requires zcash_tx_tool to be built and in PATH or ZCASH_TX_TOOL_PATH env var.
-        See: https://github.com/QED-it/zcash_tx_tool
-        """
-        import subprocess
-        import os
-        
-        tool_path = self._get_tx_tool_path()
-        
-        if not tool_path:
-            # Fallback to existing rich memo method
-            return self.create_zsa_issuance_tx(issuer_zaddr, property_id, total_shares, asset_symbol)
-        
-        asset_symbol = asset_symbol or f"ZREAL-PROP-{property_id}"
-        
-        # Build command for zcash_tx_tool (example - adjust based on actual CLI)
-        # This is a conceptual integration. Real usage depends on the tool's exact interface.
-        cmd = [
-            tool_path,
-            "create-zsa-issuance",
-            "--from", issuer_zaddr,
-            "--property-id", str(property_id),
-            "--total-shares", str(total_shares),
-            "--asset-symbol", asset_symbol,
-            "--network", "testnet"  # or mainnet
-        ]
-        
+        if not self.rpc_url:
+            missing.append("ZCASH_RPC_URL")
+
+        tool_exists = False
+        if not tool:
+            missing.append("ZCASH_TX_TOOL_PATH or zcash_tx_tool on PATH")
+        else:
+            tool_exists = os.path.exists(tool)
+            if not tool_exists:
+                missing.append("existing ZCASH_TX_TOOL_PATH")
+
+        issue_missing, issue_warnings = self._validate_template_for_report(
+            settings.ZCASH_ZSA_ISSUE_COMMAND,
+            self.ISSUE_REQUIRED_FIELDS,
+            "ZSA issue",
+        )
+        status_missing, status_warnings = self._validate_template_for_report(
+            settings.ZCASH_ZSA_STATUS_COMMAND,
+            self.STATUS_REQUIRED_FIELDS,
+            "ZSA status",
+        )
+        missing.extend(issue_missing)
+        missing.extend(status_missing)
+        warnings.extend(issue_warnings)
+        warnings.extend(status_warnings)
+
+        command_preparable = False
+        if settings.ZCASH_ZSA_ISSUE_COMMAND and tool:
+            context = {
+                "tool": tool,
+                "issuer_zaddr": "ztestsapling1validationaddress",
+                "asset_symbol": "ZREAL-VALIDATION",
+                "total_shares": 1,
+                "network": self.network or "missing-network",
+                "metadata_json": "{}",
+                "metadata_file": "",
+                "operation_id": "validation-operation-id",
+            }
+            try:
+                shlex.split(settings.ZCASH_ZSA_ISSUE_COMMAND.format(**context), posix=os.name != "nt")
+                command_preparable = True
+            except Exception as exc:
+                missing.append("safely preparable ZSA issue command")
+                warnings.append(f"ZSA issue command could not be prepared safely: {exc}")
+
+        missing = sorted(set(missing))
+        warnings = sorted(set(warnings))
+
+        return {
+            "configured": bool(backend or tool or settings.ZCASH_ZSA_ISSUE_COMMAND or settings.ZCASH_ZSA_STATUS_COMMAND),
+            "ready": not missing and command_preparable,
+            "missing": missing,
+            "warnings": warnings,
+            "method": backend,
+            "backend": backend,
+            "network": self.network or "",
+            "tool_path_configured": bool(settings.ZCASH_TX_TOOL_PATH),
+            "tool_path_exists": tool_exists,
+            "tool_path_display": tool or "",
+            "issue_command_configured": bool(settings.ZCASH_ZSA_ISSUE_COMMAND),
+            "status_command_configured": bool(settings.ZCASH_ZSA_STATUS_COMMAND),
+            "rpc_url_configured": bool(self.rpc_url),
+            "command_preparable": command_preparable,
+            "safe_display": {
+                "backend": backend,
+                "network": self.network or "",
+                "tool_path": tool or "",
+                "issue_placeholders": sorted(self._template_fields(settings.ZCASH_ZSA_ISSUE_COMMAND)),
+                "status_placeholders": sorted(self._template_fields(settings.ZCASH_ZSA_STATUS_COMMAND)),
+            },
+        }
+
+    def validate_command_template(self, template, required_fields, purpose):
+        if not template:
+            raise ZcashConfigurationError(f"{purpose} command template is not configured.")
+
+        fields = {
+            field_name
+            for _, field_name, _, _ in string.Formatter().parse(template)
+            if field_name
+        }
+        unknown = fields - self.TEMPLATE_FIELDS
+        missing = required_fields - fields
+        if unknown:
+            raise ZcashConfigurationError(
+                f"{purpose} command template contains unsupported placeholder(s): {', '.join(sorted(unknown))}."
+            )
+        if missing:
+            raise ZcashConfigurationError(
+                f"{purpose} command template is missing required placeholder(s): {', '.join(sorted(missing))}."
+            )
+        return fields
+
+    def validate_issue_configuration(self, issuer_zaddr, asset_symbol, total_shares, metadata=None):
+        backend = settings.ZSA_ISSUANCE_BACKEND
+        if backend not in self.ALLOWED_BACKENDS:
+            raise ZcashConfigurationError(
+                f"Unsupported ZSA_ISSUANCE_BACKEND '{backend}'. Supported: {', '.join(sorted(self.ALLOWED_BACKENDS))}."
+            )
+        tool = self._tx_tool_path()
+        if not tool:
+            raise ZcashConfigurationError(
+                "ZCASH_TX_TOOL_PATH is not configured and zcash_tx_tool was not found on PATH."
+            )
+        if not os.path.exists(tool):
+            raise ZcashConfigurationError(f"Configured ZCASH_TX_TOOL_PATH does not exist: {tool}")
+        if not self.rpc_url:
+            raise ZcashConfigurationError("ZCASH_RPC_URL is not configured.")
+        self.validate_address(issuer_zaddr)
+        if not asset_symbol or not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{2,63}", asset_symbol):
+            raise ValueError("Asset symbol must be 3-64 characters using uppercase letters, numbers, '_' or '-'.")
+        if int(total_shares) <= 0:
+            raise ValueError("Total shares must be greater than zero.")
+        self.validate_command_template(settings.ZCASH_ZSA_ISSUE_COMMAND, self.ISSUE_REQUIRED_FIELDS, "ZSA issue")
+        if metadata is not None:
+            json.dumps(metadata, sort_keys=True)
+
+    def validate_status_configuration(self):
+        tool = self._tx_tool_path()
+        if not tool:
+            raise ZcashConfigurationError(
+                "ZCASH_TX_TOOL_PATH is not configured and zcash_tx_tool was not found on PATH."
+            )
+        if not os.path.exists(tool):
+            raise ZcashConfigurationError(f"Configured ZCASH_TX_TOOL_PATH does not exist: {tool}")
+        if not self.rpc_url:
+            raise ZcashConfigurationError("ZCASH_RPC_URL is not configured.")
+        self.validate_command_template(settings.ZCASH_ZSA_STATUS_COMMAND, self.STATUS_REQUIRED_FIELDS, "ZSA status")
+
+    def _parse_tool_output(self, stdout):
+        stdout = stdout.strip()
+        if not stdout:
+            raise ZcashToolOutputError("ZSA tool returned no output.")
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode == 0:
-                txid = result.stdout.strip()
-                return {
-                    "success": True,
-                    "txid": txid,
-                    "method": "zcash_tx_tool",
-                    "asset_symbol": asset_symbol,
-                    "note": "ZSA issuance created via zcash_tx_tool"
-                }
+            data = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise ZcashToolOutputError("ZSA tool must return a JSON object.") from exc
+        if not isinstance(data, dict):
+            raise ZcashToolOutputError("ZSA tool output must be a JSON object.")
+
+        status = data.get("status")
+        if status is not None and status not in self.ALLOWED_STATUSES:
+            raise ZcashToolOutputError(f"Unsupported ZSA status returned by tool: {status}")
+
+        if not any(data.get(key) for key in ("operation_id", "txid", "asset_id")):
+            raise ZcashToolOutputError("ZSA tool output did not include operation_id, txid, or asset_id.")
+
+        if status == "confirmed" and not data.get("asset_id"):
+            raise ZcashToolOutputError("Confirmed ZSA output must include asset_id.")
+
+        if status is None:
+            if data.get("asset_id"):
+                data["status"] = "confirmed"
+            elif data.get("txid"):
+                data["status"] = "broadcast"
             else:
-                # Fallback on error
-                return self.create_zsa_issuance_tx(issuer_zaddr, property_id, total_shares, asset_symbol)
-        except Exception as e:
-            # Fallback
-            return self.create_zsa_issuance_tx(issuer_zaddr, property_id, total_shares, asset_symbol)
+                data["status"] = "pending"
+        return data
 
-    # ==================== SAPLING-SPECIFIC RPC INTEGRATION ====================
+    def _run_tool_command(self, template, context, metadata=None):
+        metadata_json = json.dumps(metadata or {}, sort_keys=True, separators=(",", ":"))
+        context = {
+            **context,
+            "tool": self._tx_tool_path(),
+            "network": self.network,
+            "metadata_json": metadata_json,
+            "metadata_file": "",
+        }
+        command = template.format(**context)
+        result = subprocess.run(
+            shlex.split(command, posix=os.name != "nt"),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+            env={**os.environ, "ZREAL_ZSA_METADATA_JSON": metadata_json},
+        )
 
-    def generate_sapling_address(self, address_type: str = "sapling"):
-        """
-        Generate a new Sapling shielded address.
-        address_type: 'sapling' (recommended) or 'transparent'
-        """
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "ZSA tool failed.")
+
+        return self._parse_tool_output(result.stdout)
+
+    def issue_zsa(self, issuer_zaddr, asset_symbol, total_shares, metadata=None):
+        self.validate_issue_configuration(issuer_zaddr, asset_symbol, total_shares, metadata=metadata)
+        data = self._run_tool_command(
+            settings.ZCASH_ZSA_ISSUE_COMMAND,
+            {
+                "issuer_zaddr": issuer_zaddr,
+                "asset_symbol": asset_symbol,
+                "total_shares": total_shares,
+            },
+            metadata=metadata,
+        )
+        data["backend"] = settings.ZSA_ISSUANCE_BACKEND
+        return data
+
+    def refresh_zsa_status(self, operation_id):
+        if not operation_id:
+            raise ValueError("operation_id is required to refresh pending ZSA status.")
+        self.validate_status_configuration()
+        data = self._run_tool_command(
+            settings.ZCASH_ZSA_STATUS_COMMAND,
+            {"operation_id": operation_id},
+        )
+        data["backend"] = settings.ZSA_ISSUANCE_BACKEND
+        return data
+
+    def generate_sapling_address(self, address_type="sapling"):
         if address_type == "sapling":
             return self._call("z_getnewaddress", ["sapling"])
-        else:
-            return self._call("getnewaddress")
-
-    def get_sapling_balance(self, zaddr: str = None, minconf: int = 1):
-        """
-        Get balance for a specific Sapling address or all shielded funds.
-        """
-        if zaddr:
-            return self._call("z_getbalance", [zaddr, minconf])
-        # Get total shielded balance
-        return self._call("z_gettotalbalance", [minconf])
-
-    def list_sapling_unspent(self, zaddr: str = None, minconf: int = 1):
-        """
-        List unspent Sapling notes (very useful for building transactions manually
-        or showing available shielded funds).
-        """
-        params = [minconf]
-        if zaddr:
-            params.insert(0, [zaddr])
-        return self._call("z_listunspent", params)
-
-    def export_viewing_key(self, zaddr: str):
-        """
-        Export the viewing key for a Sapling address.
-        This is powerful for the SaaS: allow investors to share read-only access
-        to their shielded portfolio without revealing spending keys.
-        """
-        return self._call("z_exportviewingkey", [zaddr])
-
-    def import_viewing_key(self, viewing_key: str, rescan: str = "whenkeyisnew"):
-        """
-        Import a viewing key (for read-only access to shielded funds).
-        """
-        return self._call("z_importviewingkey", [viewing_key, rescan])
-
-    def get_sapling_address_type(self, zaddr: str):
-        """
-        Check if an address is Sapling, Orchard, or transparent.
-        """
-        # z_validateaddress works for both transparent and shielded
-        result = self._call("z_validateaddress", [zaddr])
-        return result.get("result", {})
-
-    def create_sapling_shielded_tx(self, from_zaddr: str, to_zaddr: str, amount: float,
-                                   memo: str = None, privacy_policy: str = "AllowFullyShielded"):
-        """
-        Convenience method for simple Sapling-to-Sapling transfers.
-        """
-        amounts = [{
-            "address": to_zaddr,
-            "amount": amount,
-            "memo": memo
-        }]
-        return self.z_sendmany(
-            fromaddress=from_zaddr,
-            amounts=amounts,
-            privacyPolicy=privacy_policy
-        )
+        return self._call("getnewaddress")

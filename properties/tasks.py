@@ -2,42 +2,16 @@
 Celery tasks for ZReal.
 
 These tasks handle background processing for:
-- Document intelligence (Legal Shield)
 - ZSA transaction confirmation polling
 """
 
 from celery import shared_task
-from django.utils import timezone
 import logging
 
-from properties.models import Property, PropertyDocument
+from properties.models import Property
+from zcash_integration.zcash_client import ZcashClient
 
 logger = logging.getLogger(__name__)
-
-
-@shared_task(bind=True, max_retries=3)
-def process_document_task(self, document_id):
-    """
-    Background task to process uploaded documents with Legal Shield.
-    """
-    try:
-        doc = PropertyDocument.objects.get(id=document_id)
-        logger.info(f"Processing document {document_id} for property {doc.property_id}")
-
-        # In production, this would call pdfplumber + pytesseract here
-        # For now we assume the view already did basic processing.
-
-        doc.processing_status = 'completed'
-        doc.processed_at = timezone.now()
-        doc.save()
-
-        logger.info(f"Document {document_id} processed successfully")
-
-    except PropertyDocument.DoesNotExist:
-        logger.error(f"Document {document_id} not found")
-    except Exception as exc:
-        logger.error(f"Error processing document {document_id}: {exc}")
-        raise self.retry(exc=exc, countdown=60)
 
 
 @shared_task(bind=True, max_retries=5)
@@ -48,20 +22,30 @@ def poll_zsa_confirmation(self, property_id, txid):
     """
     try:
         prop = Property.objects.get(id=property_id)
-        logger.info(f"Polling confirmation for ZSA tx {txid} on property {property_id}")
+        operation = prop.tokenization_operations.filter(operation_id=txid).first()
+        if not operation:
+            operation = prop.tokenization_operations.filter(txid=txid).first()
+        if not operation or not operation.operation_id:
+            logger.warning("No refreshable tokenization operation found for property=%s id=%s", property_id, txid)
+            return
 
-        # In production: call Zcash RPC getrawtransaction or gettransaction
-        # For demo we assume it's confirmed after some time
+        result = ZcashClient().refresh_zsa_status(operation.operation_id)
+        operation.mark_from_result(result)
+        prop.tokenization_status = operation.status
+        prop.zcash_txid = operation.txid or prop.zcash_txid
+        prop.zsa_asset_id = operation.asset_id or prop.zsa_asset_id
+        prop.tokenization_error = operation.error
 
-        # TODO: Replace with actual RPC call
-        is_confirmed = True  # placeholder
-
-        if is_confirmed:
+        if operation.status == 'confirmed':
             prop.status = 'tokenized'
+            prop.tokenized_at = operation.confirmed_at
             prop.save()
-            logger.info(f"Property {property_id} ZSA confirmed and marked as tokenized")
+            logger.info("Property %s ZSA confirmed", property_id)
+        elif operation.status == 'failed':
+            prop.save()
+            logger.error("Property %s ZSA failed: %s", property_id, operation.error)
         else:
-            # Retry later
+            prop.save()
             raise self.retry(countdown=30)
 
     except Property.DoesNotExist:

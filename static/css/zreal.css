@@ -1,0 +1,374 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap');
+
+:root {
+    --primary: #0f172a;
+    --primary-soft: #1e293b;
+    --accent: #d4af37;
+    --accent-dark: #b8860b;
+    --text: #e2e8f0;
+    --glass: rgba(255, 255, 255, 0.06);
+}
+
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-soft) 100%);
+    color: var(--text);
+}
+
+.glass {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.premium-card,
+.property-card {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.35);
+}
+
+.property-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.section-header {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: 0;
+}
+
+.gold-accent {
+    color: var(--accent);
+}
+
+.nav-link {
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--accent);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    padding: 0.25rem 0.75rem;
+}
+
+.elegant-btn {
+    position: relative;
+    overflow: hidden;
+    transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.elegant-btn::after {
+    animation: shimmer 2s infinite;
+    background: linear-gradient(to right, transparent 20%, rgba(255, 255, 255, 0.3) 50%, transparent 80%);
+    content: '';
+    height: 200%;
+    left: -100%;
+    position: absolute;
+    top: -50%;
+    transform: skewX(-25deg);
+    width: 50%;
+}
+
+.metric-value {
+    font-variant-numeric: tabular-nums;
+}
+
+.map-shell {
+    min-height: 100vh;
+}
+
+.zreal-map-page {
+    margin: 0 auto;
+    max-width: 1280px;
+    padding: 2.5rem 2rem 4rem;
+}
+
+.zreal-map-hero {
+    align-items: flex-end;
+    display: flex;
+    gap: 1.5rem;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+.zreal-eyebrow {
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+
+.zreal-map-title {
+    font-size: clamp(2.6rem, 7vw, 4.8rem);
+    line-height: 0.95;
+    margin: 0;
+}
+
+.zreal-map-subtitle {
+    color: rgb(226 232 240 / 0.68);
+    font-size: 1rem;
+    margin: 0.85rem 0 0;
+    max-width: 44rem;
+}
+
+.zreal-map-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.zreal-map-nav-link {
+    align-items: center;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 999px;
+    color: var(--text);
+    display: inline-flex;
+    font-size: 0.9rem;
+    gap: 0.55rem;
+    padding: 0.75rem 1.1rem;
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.zreal-map-nav-link:hover {
+    background: rgb(255 255 255 / 0.08);
+    border-color: rgb(212 175 55 / 0.55);
+    color: var(--accent);
+}
+
+.zreal-map-empty,
+.zreal-map-card,
+.zreal-map-list {
+    border-radius: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.zreal-map-empty {
+    padding: 1.25rem 1.5rem;
+}
+
+.zreal-map-empty h2 {
+    color: var(--text);
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.zreal-map-empty p {
+    color: rgb(226 232 240 / 0.62);
+    margin: 0.35rem 0 0;
+}
+
+.zreal-map-card {
+    padding: 1rem;
+}
+
+.zreal-map-toolbar {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 0.35rem 0.35rem 1rem;
+}
+
+.zreal-toolbar-label {
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.zreal-toolbar-meta,
+.zreal-map-list-heading span {
+    color: rgb(226 232 240 / 0.55);
+    font-size: 0.85rem;
+}
+
+.zreal-map-legend {
+    align-items: center;
+    color: rgb(226 232 240 / 0.7);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    gap: 0.85rem;
+    justify-content: flex-end;
+}
+
+.legend-dot {
+    border-radius: 999px;
+    display: inline-block;
+    height: 0.65rem;
+    margin-right: 0.35rem;
+    vertical-align: -0.05rem;
+    width: 0.65rem;
+}
+
+.legend-public {
+    background: #34d399;
+    box-shadow: 0 0 0 4px rgb(52 211 153 / 0.12);
+}
+
+.legend-draft {
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgb(212 175 55 / 0.12);
+}
+
+#property-map {
+    border-radius: 1rem;
+    height: 640px;
+    min-height: 420px;
+    width: 100%;
+}
+
+.zreal-leaflet-map {
+    background:
+        linear-gradient(135deg, rgb(15 23 42 / 0.9), rgb(30 41 59 / 0.94)),
+        radial-gradient(circle at 30% 30%, rgb(212 175 55 / 0.2), transparent 30%);
+    border: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.zreal-map-fallback {
+    border: 1px solid rgb(245 158 11 / 0.3);
+    border-radius: 1rem;
+    color: #fcd34d;
+    font-size: 0.9rem;
+    margin-top: 0.85rem;
+    padding: 0.9rem 1rem;
+}
+
+.property-popup {
+    color: #0f172a;
+    max-width: 260px;
+}
+
+.property-popup h3 {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.property-popup p {
+    margin: 0.25rem 0;
+}
+
+.property-popup code {
+    font-size: 0.75rem;
+}
+
+.zreal-map-list {
+    padding: 1.25rem;
+}
+
+.zreal-map-list-heading {
+    align-items: baseline;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.zreal-map-list-heading h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.zreal-map-list-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.zreal-map-property-card {
+    align-items: center;
+    background: rgb(255 255 255 / 0.045);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 1rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1rem;
+}
+
+.zreal-map-property-card h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.zreal-map-property-card p {
+    color: rgb(226 232 240 / 0.58);
+    font-size: 0.88rem;
+    margin: 0.25rem 0 0;
+}
+
+.modal-hidden {
+    display: none;
+}
+
+input:not([type="radio"]):not([type="checkbox"]),
+textarea,
+select {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 1rem;
+    color: var(--text);
+    padding: 0.75rem 1rem;
+    width: 100%;
+}
+
+input:not([type="radio"]):not([type="checkbox"]):focus,
+textarea:focus,
+select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+    outline: none;
+}
+
+option {
+    background: var(--primary);
+}
+
+@keyframes shimmer {
+    100% {
+        transform: skewX(-25deg) translateX(400%);
+    }
+}
+
+@media (max-width: 760px) {
+    .zreal-map-page {
+        padding: 1.5rem 1rem 3rem;
+    }
+
+    .zreal-map-hero,
+    .zreal-map-toolbar,
+    .zreal-map-property-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .zreal-map-nav,
+    .zreal-map-legend {
+        justify-content: flex-start;
+    }
+
+    #property-map {
+        height: 460px;
+        min-height: 360px;
+    }
+}

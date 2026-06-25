@@ -2,12 +2,18 @@ Django>=5.0
 djangorestframework
 django-allauth
 dj-stripe
+stripe
+django-environ
+django-prometheus
+whitenoise
 psycopg2-binary
 django-filter
 requests
-scikit-learn
-joblib
-pandas
+gunicorn
+pdfplumber
+pytesseract
+Pillow
+channels
 # For future Celery
 celery[redis]
 redis

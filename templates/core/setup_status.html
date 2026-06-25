@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}ZReal | Setup Status{% endblock %}
+
+{% block content %}
+<main class="max-w-5xl mx-auto px-8 py-12">
+    <header class="mb-10">
+        <div class="uppercase tracking-[2px] text-xs text-[#D4AF37] mb-2">Internal</div>
+        <h1 class="section-header text-5xl font-bold tracking-tight">Local Setup Status</h1>
+        <p class="text-white/60 mt-2">Secret-safe readiness checks for local development and admin review.</p>
+    </header>
+
+    <section class="glass rounded-3xl border border-white/10 p-6 mb-8">
+        <div class="grid gap-3">
+            {% for check in checks %}
+                <div class="flex flex-col gap-2 rounded-2xl bg-white/5 p-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <div class="font-semibold">{{ check.label }}</div>
+                        {% if check.detail %}
+                            <div class="text-xs text-white/50 mt-1 break-all">{{ check.detail }}</div>
+                        {% endif %}
+                    </div>
+                    {% if check.ok %}
+                        <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Configured</span>
+                    {% else %}
+                        <span class="status-badge bg-amber-500/10 text-amber-300 border border-amber-500/30">Missing</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="glass rounded-3xl border border-white/10 p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold">ZSA Backend</h2>
+                <p class="text-sm text-white/60 mt-1">Backend: <span class="font-mono">{{ zsa.backend|default:"Not configured" }}</span></p>
+                <p class="text-sm text-white/60">Network: <span class="font-mono">{{ zsa.network|default:"Not configured" }}</span></p>
+                <p class="text-sm text-white/60 break-all">Tool path: <span class="font-mono">{{ zsa.tool_path_display|default:"Not configured" }}</span></p>
+            </div>
+            {% if zsa.ready %}
+                <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Ready</span>
+            {% else %}
+                <span class="status-badge bg-red-500/10 text-red-300 border border-red-500/30">Not Ready</span>
+            {% endif %}
+        </div>
+
+        {% if zsa.missing %}
+            <div class="mt-6">
+                <h3 class="text-sm font-semibold text-amber-200 mb-2">Missing</h3>
+                <ul class="space-y-2 text-sm text-white/70">
+                    {% for item in zsa.missing %}
+                        <li class="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-4 py-2">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if zsa.warnings %}
+            <div class="mt-6">
+                <h3 class="text-sm font-semibold text-red-200 mb-2">Warnings</h3>
+                <ul class="space-y-2 text-sm text-white/70">
+                    {% for item in zsa.warnings %}
+                        <li class="rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-2">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

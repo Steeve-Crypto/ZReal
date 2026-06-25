@@ -1,38 +1,24 @@
-# Security Audit Checklist – Zcash Integration
+# Zcash Security Notes
 
-## 1. Key Management
-- [ ] Issuer/platform shielded addresses are never exposed in frontend
-- [ ] Private keys / spending keys are stored securely (HSM or encrypted env)
-- [ ] `from_zaddr` used in payouts is properly funded and monitored
-- [ ] No hardcoded testnet/mainnet addresses in production code
+ZReal does not store spending keys and does not generate fake tokenization IDs.
 
-## 2. Transaction Security
-- [ ] All Zcash calls use `AllowFullyShielded` policy where possible
-- [ ] Memos do not leak sensitive PII (only hashes or encrypted data)
-- [ ] Transaction amounts are validated server-side before sending
-- [ ] Failed transactions are properly retried or marked as failed
+## Current Protections
 
-## 3. API & RPC Security
-- [ ] Zcash RPC is not exposed publicly
-- [ ] Strong authentication on Zcash node (username + password or cookie)
-- [ ] Rate limiting on all endpoints that trigger Zcash transactions
-- [ ] Input validation on all shielded addresses
+- issuer mutations require authentication
+- issuers can only mutate their own properties
+- tokenization uses POST + CSRF
+- document upload is ownership-protected
+- ZSA attempts are recorded in `TokenizationOperation`
+- missing ZSA configuration fails loudly
+- tokenization metadata uses document hashes and selected structured fields, not raw legal text
+- plaintext viewing-key storage is not present
 
-## 4. Dividend Payout Flow
-- [ ] Payout calculation is deterministic and auditable
-- [ ] Distribution records are created **before** sending funds (idempotency)
-- [ ] Monitoring task properly updates status based on on-chain data
-- [ ] No double-spend risk in concurrent payout runs
+## Required Before Production
 
-## 5. General Application Security
-- [ ] All sensitive endpoints require authentication + authorization
-- [ ] CSRF protection enabled on all state-changing requests
-- [ ] OpenTelemetry + structured logging for audit trails
-- [ ] Falco rules monitoring for anomalous Zcash RPC behavior
-
-## Recommended Tools for Audit
-- **Zcash-specific**: `zcash-cli` debugging, `z_getoperationstatus`
-- **General**: `bandit`, `safety`, `pip-audit`, OWASP ZAP
-- **Runtime**: Falco + eBPF monitoring
-
-**Next Step**: Engage a security firm familiar with Zcash / zk-SNARKs for a formal audit before mainnet.
+- verify the configured ZSA tool on testnet
+- ensure the Zcash RPC service is not public
+- keep private keys outside the Django app
+- add rate limiting to tokenization and upload endpoints
+- viewing keys are not currently stored; review any future encrypted storage design before enabling them
+- add structured audit logs for ZSA operations
+- run formal security review before mainnet or real capital

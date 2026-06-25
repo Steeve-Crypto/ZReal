@@ -1,0 +1,12 @@
+<div class="glass rounded-3xl p-6 border border-white/10 premium-card">
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="text-sm text-white/50">{{ label }}</div>
+            <div class="metric-value text-4xl font-semibold tracking-tight mt-1">{{ value }}</div>
+            {% if detail %}
+                <div class="text-xs text-white/50 mt-1">{{ detail }}</div>
+            {% endif %}
+        </div>
+        <i class="{{ icon }} text-4xl {{ icon_class|default:'text-white/20' }}"></i>
+    </div>
+</div>

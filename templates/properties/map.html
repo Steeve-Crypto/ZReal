@@ -1,68 +1,121 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>ZReal Property Map - Zcash RWA</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Leaflet CSS & JS - Best free open-source Google Maps alternative -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        #map { height: 600px; width: 100%; border-radius: 12px; }
-        body { font-family: system-ui, sans-serif; margin: 20px; background: #f8f9fa; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #1a1a2e; }
-        .property-popup { max-width: 250px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🗺️ ZReal Property Map</h1>
-        <p><strong>Private Real Estate on Zcash</strong> — Explore tokenized properties. Click markers for details & ZSA status.</p>
-        
-        <div id="map"></div>
-        
-        <p style="margin-top: 20px; color: #666;">
-            Powered by Leaflet + OpenStreetMap (completely free & open-source). 
-            PostGIS powers backend spatial queries.
-        </p>
-    </div>
+{% extends "base.html" %}
+{% load static %}
 
-    <script>
-        // Initialize map (default center - change in view)
-        var map = L.map('map').setView([{{ map_center.0 }}, {{ map_center.1 }}], 6);
-        
-        // OpenStreetMap tiles - free Google Maps alternative
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors | ZReal on Zcash',
-            maxZoom: 19
-        }).addTo(map);
+{% block title %}ZReal | Property Map{% endblock %}
 
-        // Add property markers from Django context
-        {% for prop in properties %}
-        var marker = L.marker([{{ prop.location.y }}, {{ prop.location.x }}]).addTo(map);
-        
-        var popupContent = `
-            <div class="property-popup">
-                <h3>{{ prop.title }}</h3>
-                <p><strong>Address:</strong> {{ prop.address }}</p>
-                <p><strong>Size:</strong> {{ prop.size_sqm }} sqm</p>
-                <p><strong>Est. Value:</strong> ${{ prop.estimated_value|default:"N/A" }}</p>
-                <p><strong>Status:</strong> <span style="color: {% if prop.status == 'tokenized' %}green{% else %}orange{% endif %};">{{ prop.status }}</span></p>
-                <p><strong>Total Shares:</strong> {{ prop.total_shares }}</p>
-                {% if prop.zsa_asset_id %}
-                <p><strong>ZSA ID:</strong> <code>{{ prop.zsa_asset_id|truncatechars:20 }}</code></p>
-                {% endif %}
-                <a href="/admin/properties/property/{{ prop.id }}/change/" target="_blank">Manage in Admin</a>
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block body_class %}map-shell{% endblock %}
+
+{% block content %}
+<main class="zreal-map-page">
+    <header class="zreal-map-hero">
+        <div>
+            <div class="zreal-eyebrow">Private Real Estate</div>
+            <h1 class="section-header zreal-map-title">ZReal Property Map</h1>
+            <p class="zreal-map-subtitle">Explore real database-backed ZReal properties and their tokenization status.</p>
+        </div>
+        <nav class="zreal-map-nav" aria-label="Map navigation">
+            <a href="{% url 'investor_property_browse' %}" class="zreal-map-nav-link">
+                <i class="fas fa-building"></i>
+                <span>Browse</span>
+            </a>
+            {% if request.user.is_authenticated %}
+                <a href="{% url 'dashboard_redirect' %}" class="zreal-map-nav-link">
+                    <i class="fas fa-gauge-high"></i>
+                    <span>Dashboard</span>
+                </a>
+            {% else %}
+                <a href="{% url 'account_login' %}" class="zreal-map-nav-link">
+                    <i class="fas fa-right-to-bracket"></i>
+                    <span>Login</span>
+                </a>
+            {% endif %}
+        </nav>
+    </header>
+
+    {% if not has_public_properties %}
+        <section class="zreal-map-empty glass" data-map-empty-state>
+            <div>
+                <h2>No tokenized properties are available on the public map yet.</h2>
+                <p>Drafts, failed tokenization attempts, and issuer work-in-progress properties stay off the public map.</p>
             </div>
-        `;
-        marker.bindPopup(popupContent);
-        {% endfor %}
+        </section>
+    {% endif %}
 
-        // Optional: Add click handler for future "Invest with Zcash" button
-        map.on('click', function(e) {
-            console.log('Map clicked at:', e.latlng);
-            // Future: Open investment modal with Zcash payment flow
-        });
-    </script>
-</body>
-</html>
+    <section class="zreal-map-card glass">
+        <div class="zreal-map-toolbar">
+            <div>
+                <div class="zreal-toolbar-label">Live Map</div>
+                <div class="zreal-toolbar-meta">
+                    {{ public_properties|length }} public propert{{ public_properties|length|pluralize:"y,ies" }}
+                    {% if has_issuer_only_properties %}
+                        · {{ issuer_only_properties|length }} issuer-only draft{{ issuer_only_properties|length|pluralize }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="zreal-map-legend" aria-label="Map legend">
+                <span><i class="legend-dot legend-public"></i> Public</span>
+                {% if is_issuer_map %}
+                    <span><i class="legend-dot legend-draft"></i> Issuer-only draft</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="property-map" class="zreal-leaflet-map" data-center="{{ map_center_json }}" data-has-public="{{ has_public_properties|yesno:'true,false' }}"></div>
+
+        <div id="property-map-fallback" class="zreal-map-fallback" hidden>
+            Map tiles could not load. The property list below is still available.
+        </div>
+    </section>
+
+    {% if has_issuer_only_properties %}
+        <section class="zreal-map-list glass" data-issuer-drafts>
+            <div class="zreal-map-list-heading">
+                <h2>Issuer-Only Drafts</h2>
+                <span>Visible only to you</span>
+            </div>
+            <div class="zreal-map-list-grid">
+                {% for prop in issuer_only_properties %}
+                    <article class="zreal-map-property-card">
+                        <div>
+                            <h3>{{ prop.title }}</h3>
+                            <p>{{ prop.address }}</p>
+                        </div>
+                        <span class="status-badge bg-white/10 text-white/70 border border-white/20">Issuer-only draft</span>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
+    {% if has_public_properties %}
+        <section class="zreal-map-list glass" data-public-properties>
+            <div class="zreal-map-list-heading">
+                <h2>Public Properties</h2>
+                <span>Tokenized or active</span>
+            </div>
+            <div class="zreal-map-list-grid">
+                {% for prop in public_properties %}
+                    <article class="zreal-map-property-card">
+                        <div>
+                            <h3>{{ prop.title }}</h3>
+                            <p>{{ prop.address }}</p>
+                        </div>
+                        <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">{{ prop.get_status_display }}</span>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+</main>
+
+{{ properties_json|json_script:"property-map-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{% static 'js/property_map.js' %}"></script>
+{% endblock %}

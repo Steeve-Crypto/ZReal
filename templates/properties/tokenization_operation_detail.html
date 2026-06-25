@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}ZReal | Tokenization Operation{% endblock %}
+
+{% block content %}
+<main class="max-w-6xl mx-auto px-8 py-12">
+    <header class="flex flex-col gap-5 mb-10 md:flex-row md:items-end md:justify-between">
+        <div>
+            <div class="uppercase tracking-[2px] text-xs text-[#D4AF37] mb-2">Tokenization Audit</div>
+            <h1 class="section-header text-5xl font-bold tracking-tight">{{ property.title }}</h1>
+            <p class="text-white/60 mt-2">{{ property.address }}</p>
+        </div>
+        <a href="{% url 'issuer_dashboard' %}" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
+            <i class="fas fa-arrow-left text-[#D4AF37]"></i>
+            <span>Dashboard</span>
+        </a>
+    </header>
+
+    <section class="grid gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="glass rounded-3xl border border-white/10 p-6">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold">Operation</h2>
+                        <p class="text-sm text-white/60 mt-1">Issuer: {{ operation.issuer.username }}</p>
+                    </div>
+                    {% if operation.status == 'confirmed' %}
+                        <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Confirmed</span>
+                    {% elif operation.status == 'failed' %}
+                        <span class="status-badge bg-red-500/10 text-red-300 border border-red-500/30">Failed</span>
+                    {% else %}
+                        <span class="status-badge bg-amber-500/10 text-amber-300 border border-amber-500/30">{{ operation.get_status_display }}</span>
+                    {% endif %}
+                </div>
+
+                <dl class="grid gap-4 mt-6 text-sm md:grid-cols-2">
+                    <div><dt class="text-white/40">Method / Backend</dt><dd class="font-mono">{{ operation.backend }}</dd></div>
+                    <div><dt class="text-white/40">Asset Symbol</dt><dd class="font-mono">{{ operation.asset_symbol }}</dd></div>
+                    <div><dt class="text-white/40">Total Shares</dt><dd>{{ operation.total_shares }}</dd></div>
+                    <div><dt class="text-white/40">Issuer z-address</dt><dd class="font-mono">{{ issuer_zaddr_masked }}</dd></div>
+                    <div><dt class="text-white/40">Operation ID</dt><dd class="font-mono break-all">{{ operation.operation_id|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Transaction ID</dt><dd class="font-mono break-all">{{ operation.txid|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Asset ID</dt><dd class="font-mono break-all">{{ operation.asset_id|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Error</dt><dd class="text-red-200">{{ operation.error|default:"No error recorded" }}</dd></div>
+                </dl>
+
+                {% if can_refresh %}
+                    <form method="post" action="{% url 'refresh_tokenization_operation' operation.pk %}" class="mt-6 flex justify-end">
+                        {% csrf_token %}
+                        <button type="submit" class="px-5 py-2 text-sm font-medium rounded-3xl bg-white/5 hover:bg-[#D4AF37] hover:text-[#0F172A] border border-white/20 transition-all">
+                            Refresh Status
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+
+            <div class="glass rounded-3xl border border-white/10 p-6">
+                <h2 class="text-2xl font-semibold mb-4">Safe Metadata</h2>
+                <pre class="overflow-auto rounded-2xl bg-black/30 p-4 text-xs text-white/80">{{ metadata_pretty }}</pre>
+            </div>
+
+            {% if request.user.is_staff %}
+                <div class="glass rounded-3xl border border-white/10 p-6">
+                    <h2 class="text-2xl font-semibold mb-4">Raw Backend Response</h2>
+                    <pre class="overflow-auto rounded-2xl bg-black/30 p-4 text-xs text-white/80">{{ response_pretty }}</pre>
+                </div>
+            {% endif %}
+        </div>
+
+        <aside class="space-y-6">
+            <div class="glass rounded-3xl border border-white/10 p-6">
+                <h2 class="text-xl font-semibold mb-4">Timeline</h2>
+                <dl class="space-y-4 text-sm">
+                    <div><dt class="text-white/40">Created</dt><dd>{{ operation.created_at }}</dd></div>
+                    <div><dt class="text-white/40">Broadcast</dt><dd>{{ operation.broadcast_at|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Confirmed</dt><dd>{{ operation.confirmed_at|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Failed</dt><dd>{{ operation.failed_at|default:"No data yet" }}</dd></div>
+                    <div><dt class="text-white/40">Last Refresh</dt><dd>{{ operation.last_status_refreshed_at|default:"No data yet" }}</dd></div>
+                </dl>
+            </div>
+
+            <div class="glass rounded-3xl border border-white/10 p-6">
+                <h2 class="text-xl font-semibold mb-4">Property</h2>
+                <dl class="space-y-4 text-sm">
+                    <div><dt class="text-white/40">Status</dt><dd>{{ property.get_status_display }}</dd></div>
+                    <div><dt class="text-white/40">Tokenization Status</dt><dd>{{ property.get_tokenization_status_display }}</dd></div>
+                    <div><dt class="text-white/40">Estimated Value</dt><dd>{{ property.estimated_value|default:"No data yet" }}</dd></div>
+                </dl>
+            </div>
+        </aside>
+    </section>
+</main>
+{% endblock %}

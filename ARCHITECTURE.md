@@ -1,89 +1,40 @@
-# ZReal Architecture Diagram
+# ZReal Architecture
 
-```mermaid
-graph TD
-    subgraph Frontend
-        A[Issuer Dashboard]
-        B[Investor Portfolio]
-        C[Interactive Tour]
-        D[Modals: ZSA + Legal Shield]
-    end
+## Runtime Components
 
-    subgraph Backend Django
-        E[Views & APIs]
-        F[Models: Property, Investment, Distribution, ValuationHistory]
-        G[ExternalValuationService]
-        H[ZcashClient]
-    end
+- Django views/templates provide the web app.
+- SQLite is the default local database. `DATABASE_URL` can point to Postgres for deployments.
+- Uploaded documents are stored under `MEDIA_ROOT`.
+- Zcash/ZSA issuance is delegated to a configured external tool.
+- Stripe checkout is optional and disabled until Stripe settings are present.
 
-    subgraph Background Tasks Celery
-        I[process_dividend_payouts]
-        J[monitor_zcash_transactions]
-        K[revalue_all_tokenized_properties]
-    end
+## Core Models
 
-    subgraph Data Layer
-        L[(PostgreSQL + PostGIS)]
-        M[(Redis)]
-    end
+- `core.UserProfile`: role, subscription status, optional viewing key field.
+- `properties.Property`: issuer-owned property record, map coordinates, estimated value, tokenization state.
+- `properties.PropertyDocument`: uploaded document plus extracted text/data.
+- `properties.PropertyInvestment`: investor share positions.
+- `properties.TokenizationOperation`: auditable record of each ZSA issuance attempt.
 
-    subgraph Blockchain
-        N[Zcash Testnet/Mainnet<br/>Shielded Transactions]
-    end
+## Request Flow
 
-    subgraph Observability
-        O[OpenTelemetry]
-        P[Prometheus + Grafana]
-        Q[Loki + Promtail]
-        R[Falco + Sidekick]
-    end
+1. `/accounts/` handles authentication via django-allauth.
+2. `/profile/role/` lets users choose investor or issuer.
+3. `/issuer/dashboard/` shows issuer-owned properties and real database metrics.
+4. `/properties/new/` and `/properties/<id>/edit/` manage issuer-owned property data.
+5. `/properties/<id>/upload-document/` accepts documents only from the owning issuer.
+6. `/properties/<id>/issue-zsa/` creates a `TokenizationOperation` and calls the configured ZSA backend.
+7. `/properties/<id>/refresh-zsa-status/` refreshes pending operation state.
 
-    A --> E
-    B --> E
-    D --> E
-    E --> F
-    E --> G
-    E --> H
-    G --> F
-    H --> N
-    I --> H
-    I --> F
-    J --> H
-    J --> F
-    K --> G
-    K --> F
-    F --> L
-    E --> M
-    I --> M
-    J --> M
-    K --> M
+## ZSA Boundary
 
-    E --> O
-    I --> O
-    J --> O
-    K --> O
-    O --> P
-    E --> Q
-    H --> R
-```
+ZReal does not create fake txids or fake asset IDs. The external ZSA command must return JSON containing real identifiers. If configuration is missing or the tool fails, ZReal records the failed operation and shows the issuer a clear error.
 
-## Key Components
+Tokenization metadata is generated from safe fields only: property identifier, asset symbol, share count, uploaded document types, document SHA-256 hashes, timestamps, and selected structured extraction fields. Full legal text is not passed to tokenization metadata.
 
-| Layer              | Technology                          | Responsibility |
-|--------------------|-------------------------------------|----------------|
-| **Frontend**       | Django Templates + Tailwind         | Premium UI for Issuers & Investors |
-| **Backend**        | Django + DRF                        | Business logic, APIs, Auth |
-| **Valuation**      | `ExternalValuationService`          | Heuristic + External API |
-| **Blockchain**     | `ZcashClient` + `z_sendmany`        | Shielded ZSA & Dividend txs |
-| **Background**     | Celery + Redis                      | Dividends, Monitoring, Re-valuation |
-| **Data**           | PostgreSQL + PostGIS                | Core data + geospatial |
-| **Observability**  | OTel + Prometheus + Grafana + Loki + Falco | Full visibility + security |
+## Not Implemented Yet
 
-## Data Flow Highlights
-
-- **ZSA Issuance** → `ZcashClient` → Shielded tx + rich memo
-- **Dividend Payout** → Celery → `ZcashClient.distribute_shielded_payments()` → On-chain
-- **Valuation** → `ExternalValuationService` → Heuristic or External API → History saved
-- **Real-time** → WebSocket (Channels) + `DashboardEvent` model
-
-This architecture is designed to be **scalable, auditable, and privacy-first**.
+- native in-process ZSA minting
+- investor purchase checkout
+- dividend/rental distribution execution
+- KYC/AML workflow

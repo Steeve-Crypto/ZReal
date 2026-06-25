@@ -21,10 +21,6 @@ class UserProfile(models.Model):
     subscription_status = models.CharField(max_length=50, default='inactive')  # active, past_due, canceled, etc.
     current_plan = models.CharField(max_length=50, blank=True, null=True)  # e.g. 'issuer_pro'
     
-    # For investors: store their default viewing key (encrypted in production)
-    default_viewing_key = models.TextField(blank=True, null=True, 
-                                           help_text="Exported Sapling viewing key for read-only portfolio access")
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

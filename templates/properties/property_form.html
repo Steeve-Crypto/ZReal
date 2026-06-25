@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}ZReal | {{ mode }} Property{% endblock %}
+
+{% block content %}
+<main class="max-w-3xl mx-auto px-8 py-12">
+    <header class="mb-8">
+        <h1 class="section-header text-5xl font-bold tracking-tight">{{ mode }} Property</h1>
+        <p class="text-white/60 mt-2">Store only real property data. Tokenization is handled after the property exists.</p>
+    </header>
+
+    <form method="post" class="glass rounded-3xl border border-white/10 p-8 space-y-5">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-white/70 mb-2">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <p class="text-xs text-white/40 mt-1">{{ field.help_text }}</p>
+                {% endif %}
+                {% for error in field.errors %}
+                    <p class="text-xs text-red-300 mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <div class="flex items-center gap-3 pt-3">
+            <button type="submit" class="px-6 py-3 rounded-3xl bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-[#0F172A] font-semibold">
+                Save Property
+            </button>
+            <a href="{% url 'issuer_dashboard' %}" class="px-6 py-3 rounded-3xl border border-white/20 hover:bg-white/5">
+                Cancel
+            </a>
+        </div>
+    </form>
+</main>
+{% endblock %}

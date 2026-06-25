@@ -1,26 +1,18 @@
-"""
-Django settings for ZReal project.
-Production-ready configuration with environment variable support.
-"""
-
-from pathlib import Path
 import os
+from pathlib import Path
+
 import environ
 
-# Initialize django-environ
 env = environ.Env(
-    DEBUG=(bool, False)
+    REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA=(bool, False),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Read .env file if it exists
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-# SECURITY
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-zreal-dev-key-change-in-prod-!!!')
-DEBUG = env('DEBUG', default=True)
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+DEBUG = env.bool('DEBUG', default=True)
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -29,8 +21,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.gis',  # PostGIS / GeoDjango
 
+    'channels',
     'rest_framework',
     'allauth',
     'allauth.account',
@@ -75,17 +67,10 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'zreal.wsgi.application'
+ASGI_APPLICATION = 'zreal.asgi.application'
 
-# PostgreSQL + PostGIS
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': 'zreal',
-        'USER': 'zrealuser',
-        'PASSWORD': 'yourpassword',  # Change this
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
+    'default': env.db('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 }
 
 # Password validation
@@ -103,16 +88,38 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ZReal Custom Settings
-ZCASH_RPC_URL = os.environ.get('ZCASH_RPC_URL', 'http://user:pass@localhost:18232')  # Testnet default
-ZCASH_NETWORK = 'testnet'  # or 'mainnet'
+ZCASH_RPC_URL = env('ZCASH_RPC_URL', default='')
+if not ZCASH_RPC_URL:
+    zcash_user = env('ZCASHRPC_USER', default='')
+    zcash_password = env('ZCASHRPC_PASSWORD', default='')
+    zcash_host = env('ZCASHRPC_HOST', default='')
+    zcash_port = env('ZCASHRPC_PORT', default='18232')
+    if zcash_user and zcash_password and zcash_host:
+        ZCASH_RPC_URL = f"http://{zcash_user}:{zcash_password}@{zcash_host}:{zcash_port}"
 
-# Future: Stripe
-STRIPE_PUBLISHABLE_KEY = 'pk_test_...'
-STRIPE_SECRET_KEY = 'sk_test_...'
+ZCASH_NETWORK = env('ZCASH_NETWORK', default='testnet')
+ZSA_ISSUANCE_BACKEND = env('ZSA_ISSUANCE_BACKEND', default='zcash_tx_tool')
+ZCASH_TX_TOOL_PATH = env('ZCASH_TX_TOOL_PATH', default='')
+ZCASH_ZSA_ISSUE_COMMAND = env(
+    'ZCASH_ZSA_ISSUE_COMMAND',
+    default='{tool} create-zsa-issuance --from {issuer_zaddr} --asset-symbol {asset_symbol} --total-shares {total_shares} --network {network}'
+)
+ZCASH_ZSA_STATUS_COMMAND = env(
+    'ZCASH_ZSA_STATUS_COMMAND',
+    default='{tool} status --operation-id {operation_id} --network {network}'
+)
+
+STRIPE_PUBLISHABLE_KEY = env('STRIPE_PUBLISHABLE_KEY', default='')
+STRIPE_SECRET_KEY = env('STRIPE_SECRET_KEY', default='')
+STRIPE_ISSUER_PRICE_ID = env('STRIPE_ISSUER_PRICE_ID', default='')
+REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA = env('REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA')
 
 # REST Framework
 REST_FRAMEWORK = {
@@ -122,18 +129,20 @@ REST_FRAMEWORK = {
 }
 
 # ==================== ALLAUTH CONFIG ====================
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'  # Change to 'mandatory' in production
-ACCOUNT_SIGNUP_FORM_CLASS = 'core.forms.SignupForm'  # Custom form with role selection
 
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
 
 # ==================== DJ-STRIPE CONFIG ====================
 STRIPE_LIVE_MODE = False  # Change to True in production
-DJSTRIPE_WEBHOOK_SECRET = "whsec_..."  # Set your webhook secret
+DJSTRIPE_WEBHOOK_SECRET = env('DJSTRIPE_WEBHOOK_SECRET', default='')
 DJSTRIPE_FOREIGN_KEY_TO_FIELD = "id"
 
-# GeoDjango / PostGIS note: Make sure PostGIS extension is enabled in DB
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}

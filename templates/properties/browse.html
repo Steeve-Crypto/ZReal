@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}ZReal | Browse Properties{% endblock %}
+
+{% block content %}
+<main class="max-w-7xl mx-auto px-8 py-12">
+    <header class="flex flex-col gap-5 mb-10 md:flex-row md:items-end md:justify-between">
+        <div>
+            <h1 class="section-header text-5xl font-bold tracking-tight">Browse Properties</h1>
+            <p class="text-white/60 mt-2">Tokenized and active properties available to investors.</p>
+        </div>
+        <a href="{% url 'property_map' %}" class="px-5 py-2.5 rounded-3xl border border-white/30 hover:bg-white/5 text-sm flex items-center gap-x-2 transition-all">
+            <i class="fas fa-map text-[#D4AF37]"></i>
+            <span>Map</span>
+        </a>
+    </header>
+
+    {% if properties %}
+        <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {% for prop in properties %}
+                <article class="premium-card glass rounded-3xl border border-white/10 p-6">
+                    <div class="flex items-start justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="text-xl font-semibold">{{ prop.title }}</h2>
+                            <p class="text-sm text-white/60 mt-1">{{ prop.address }}</p>
+                        </div>
+                        <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">{{ prop.get_status_display }}</span>
+                    </div>
+                    <dl class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <dt class="text-white/40">Estimated Value</dt>
+                            <dd class="font-semibold">{{ prop.estimated_value|default:"No data yet" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-white/40">Total Shares</dt>
+                            <dd class="font-semibold">{{ prop.total_shares }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-white/40">Size</dt>
+                            <dd class="font-semibold">{{ prop.size_sqm|floatformat:0 }} sqm</dd>
+                        </div>
+                        <div>
+                            <dt class="text-white/40">Asset ID</dt>
+                            <dd class="font-mono text-xs break-all">{{ prop.zsa_asset_id|default:"No data yet" }}</dd>
+                        </div>
+                    </dl>
+                </article>
+            {% endfor %}
+        </section>
+    {% else %}
+        <section class="glass rounded-3xl border border-white/10 p-12 text-center">
+            <i class="fas fa-building text-6xl text-white/20 mb-5"></i>
+            <h2 class="text-2xl font-semibold mb-2">No tokenized properties are available yet.</h2>
+            <p class="text-white/60">Issuer drafts and failed tokenization attempts are not shown to investors.</p>
+        </section>
+    {% endif %}
+</main>
+{% endblock %}

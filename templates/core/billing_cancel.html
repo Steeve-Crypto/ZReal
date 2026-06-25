@@ -1,12 +1,15 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Subscription Canceled | ZReal</title>
-</head>
-<body style="font-family: system-ui; padding: 40px; text-align: center;">
-    <h1>Subscription Canceled</h1>
-    <p>No charges were made.</p>
-    <p>You can subscribe anytime from your Issuer Dashboard.</p>
-    <a href="/issuer/dashboard/">Back to Dashboard →</a>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}ZReal | Subscription Canceled{% endblock %}
+
+{% block content %}
+<main class="max-w-xl mx-auto px-8 py-20 text-center">
+    <div class="glass rounded-3xl border border-white/10 p-10">
+        <h1 class="section-header text-4xl font-bold tracking-tight">Subscription Canceled</h1>
+        <p class="text-white/60 mt-4">No charges were made.</p>
+        <a href="{% url 'issuer_dashboard' %}" class="inline-flex mt-8 px-6 py-3 rounded-3xl border border-white/20 hover:bg-white/5">
+            Back to Dashboard
+        </a>
+    </div>
+</main>
+{% endblock %}

@@ -23,15 +23,6 @@
             "legendFormat": "5xx errors"
           }
         ]
-      },
-      {
-        "title": "ZSA Issuances",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "increase(zreal_zsa_issuances_total[1h])"
-          }
-        ]
       }
     ],
     "time": {

@@ -1,56 +1,20 @@
-# ZK-SNARK Audit Plan for ZReal
+# Zcash / ZK Audit Notes
 
-Zcash uses **zk-SNARKs** (Zero-Knowledge Succinct Non-Interactive Arguments of Knowledge) to enable shielded transactions while preserving privacy.
+ZReal does not implement custom zk-SNARK circuits.
 
-## Why ZK-SNARK Audit Matters for ZReal
+The audit scope is the application boundary around Zcash/ZSA tooling:
 
-Even though ZReal does **not** implement custom circuits, it interacts heavily with Zcash's shielded pool. A proper audit should verify that:
+- issuer address validation
+- external ZSA command configuration
+- tokenization state transitions
+- avoiding sensitive legal/property data in public metadata
+- ensuring private keys stay outside Django
+- checking that failed issuance attempts are recorded truthfully
 
-- Memos do not accidentally leak information
-- Transaction construction follows best practices
-- No side-channel leaks in how ZReal handles shielded data
+Before mainnet or real capital:
 
-## Recommended Audit Scope
-
-### 1. Zcash Integration Layer
-- Review of `ZcashClient` class and all `z_sendmany` calls
-- Verification that `AllowFullyShielded` policy is consistently used
-- Check that memo construction does not include unencrypted sensitive data
-
-### 2. Dividend Payout Flow
-- Ensure distribution amounts and recipient lists are correctly formed before calling shielded send
-- Verify that `Distribution` model state transitions are secure and atomic
-
-### 3. Data Handling
-- Audit how Legal Shield extracted data is stored in ZSA memos
-- Ensure only cryptographic commitments or hashes are stored on-chain when possible
-
-### 4. Future-Proofing
-- Prepare for potential migration to **Halo 2** or future Zcash proof systems
-
-## How to Perform / Commission the Audit
-
-### Option A: Self-Review (Internal)
-- Use `zcashd` debug logs + `getrawtransaction`
-- Review all places where shielded transactions are constructed
-- Document memo schemas
-
-### Option B: External Security Firm
-Recommended firms with Zcash/zk-SNARK experience:
-- Least Authority
-- Trail of Bits
-- NCC Group
-- Kudelski Security
-
-**Estimated Cost**: $25k – $60k depending on scope (recommended before mainnet with real capital).
-
-## Deliverables from Audit
-
-- Report on potential information leakage vectors
-- Recommendations for memo encryption / commitment schemes
-- Review of error handling around failed shielded transactions
-- Guidance on safe upgrade paths for future Zcash protocol changes
-
----
-
-**Status**: ZReal is designed to be **audit-friendly**. All critical shielded logic is centralized in `ZcashClient` and the dividend Celery tasks.
+- run a real testnet issuance
+- review the configured ZSA tool
+- verify command output parsing
+- review logs and database records for sensitive data leakage
+- commission an external security review if assets of meaningful value are involved

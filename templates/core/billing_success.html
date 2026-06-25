@@ -1,12 +1,16 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Subscription Successful | ZReal</title>
-</head>
-<body style="font-family: system-ui; padding: 40px; text-align: center;">
-    <h1>🎉 Thank you!</h1>
-    <p>Your Issuer Pro subscription has been activated.</p>
-    <p>You can now issue ZSA tokens and access all premium features.</p>
-    <a href="/issuer/dashboard/">Go to Issuer Dashboard →</a>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}ZReal | Subscription Successful{% endblock %}
+
+{% block content %}
+<main class="max-w-xl mx-auto px-8 py-20 text-center">
+    <div class="glass rounded-3xl border border-white/10 p-10">
+        <h1 class="section-header text-4xl font-bold tracking-tight">Subscription Successful</h1>
+        <p class="text-white/60 mt-4">Your issuer subscription checkout completed. Webhook confirmation may take a moment.</p>
+        <p class="text-white/50 text-sm mt-3">ZSA issuance still requires the configured Zcash/ZSA backend.</p>
+        <a href="{% url 'issuer_dashboard' %}" class="inline-flex mt-8 px-6 py-3 rounded-3xl bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-[#0F172A] font-semibold">
+            Go to Issuer Dashboard
+        </a>
+    </div>
+</main>
+{% endblock %}
