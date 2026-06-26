@@ -2,17 +2,14 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
+from .lifecycle import PROPERTY_STATUSES
+
 class Property(models.Model):
     """
     Core Real Estate Property model with geospatial support.
     Ready for ZSA tokenization linking.
     """
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('tokenizing', 'Tokenizing'),
-        ('tokenized', 'Tokenized (ZSA Issued)'),
-        ('active', 'Active - Open for Investment'),
-    ]
+    STATUS_CHOICES = list(PROPERTY_STATUSES)
     TOKENIZATION_STATUS_CHOICES = [
         ('not_started', 'Not Started'),
         ('pending', 'Pending'),
@@ -49,7 +46,7 @@ class Property(models.Model):
     )
     tokenization_error = models.TextField(blank=True)
     tokenized_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default='draft')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

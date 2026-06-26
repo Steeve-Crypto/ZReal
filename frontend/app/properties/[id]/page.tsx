@@ -5,12 +5,11 @@ import { use, useEffect, useState } from "react";
 import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
 import { ApiError, apiGet, apiJson, apiUpload } from "@/lib/api";
-import type { DocumentRecord, PropertyRecord, TokenizationOperation, ZsaConfig } from "@/types/api";
+import type { PropertyMutationResponse, PropertyRecord, TokenizationMutationResponse } from "@/types/api";
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [property, setProperty] = useState<PropertyRecord | null>(null);
-  const [zsaConfig, setZsaConfig] = useState<ZsaConfig | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [documentType, setDocumentType] = useState("Legal Document");
@@ -22,11 +21,6 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
   async function loadProperty() {
     const record = await apiGet<PropertyRecord>(`/api/properties/${id}/`);
     setProperty(record);
-    if (record.ownership.can_tokenize) {
-      apiGet<ZsaConfig>("/api/zsa/config/")
-        .then(setZsaConfig)
-        .catch(() => setZsaConfig(null));
-    }
   }
 
   useEffect(() => {
@@ -46,8 +40,8 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
     formData.append("document", selectedFile);
     formData.append("document_type", documentType);
     try {
-      await apiUpload<DocumentRecord>(`/api/properties/${id}/documents/upload/`, formData);
-      setActionMessage("Document uploaded and processed.");
+      const response = await apiUpload<PropertyMutationResponse>(`/api/properties/${id}/documents/upload/`, formData);
+      setActionMessage(response.notifications.map((item) => item.message).join(" "));
       setSelectedFile(null);
       await loadProperty();
     } catch (err) {
@@ -60,8 +54,8 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
   async function issueTokenization() {
     setActionError(null);
     setActionMessage(null);
-    if (!zsaConfig?.ready) {
-      setActionError("ZSA backend is not configured.");
+    if (!property?.readiness.ready_for_tokenization) {
+      setActionError(property?.readiness.blocking_issues.join(" ") || "Property is not ready for tokenization.");
       return;
     }
     if (!issuerZaddr.trim()) {
@@ -69,15 +63,29 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
       return;
     }
     try {
-      const operation = await apiJson<TokenizationOperation>(`/api/properties/${id}/tokenize/`, "POST", {
+      const response = await apiJson<TokenizationMutationResponse>(`/api/properties/${id}/tokenize/`, "POST", {
         issuer_zaddr: issuerZaddr.trim()
       });
-      setActionMessage(`Tokenization operation created: ${operation.asset_symbol}`);
+      setActionMessage(response.notifications.map((item) => item.message).join(" "));
       await loadProperty();
     } catch (err) {
       if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
       else setActionError(err instanceof Error ? err.message : "Tokenization request failed.");
       await loadProperty();
+    }
+  }
+
+  async function runLifecycleAction(path: string) {
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const response = await apiJson<PropertyMutationResponse>(path, "POST", {});
+      setProperty(response.property);
+      setActionMessage(response.notifications.map((item) => item.message).join(" "));
+    } catch (err) {
+      if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
+      else setActionError(err instanceof Error ? err.message : "Lifecycle action failed.");
+      await loadProperty().catch(() => undefined);
     }
   }
 
@@ -94,7 +102,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <div className="flex flex-wrap gap-2">
               {property.ownership.can_edit ? <Link href={`/properties/${property.id}/edit`} className="nav-pill">Edit</Link> : null}
-              <StatusBadge tone={property.status === "active" || property.status === "tokenized" ? "good" : "neutral"}>{property.status_display}</StatusBadge>
+              <StatusBadge tone={property.status === "active" || property.status === "tokenized" ? "good" : property.status === "tokenization_pending" ? "warn" : property.status === "archived" || property.status === "suspended" ? "bad" : "neutral"}>{property.status_display}</StatusBadge>
             </div>
           </header>
           {actionError ? <div className="rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100">{actionError}</div> : null}
@@ -109,6 +117,35 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div><dt className="text-white/40">Txid</dt><dd className="break-all">{property.tokenization.txid ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{property.tokenization.asset_id ?? "No data yet"}</dd></div>
             </dl>
+          </Card>
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Readiness</h2>
+                <p className="mt-1 text-sm text-white/55">Next action: {property.readiness.next_action.replaceAll("_", " ")}</p>
+              </div>
+              <StatusBadge tone={property.readiness.ready_for_tokenization ? "good" : "warn"}>
+                {property.readiness.ready_for_tokenization ? "Ready for tokenization" : "Blocked"}
+              </StatusBadge>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {property.readiness.checks.map((check) => (
+                <div key={check.key} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium text-white">{check.label}</div>
+                    <StatusBadge tone={check.ok ? "good" : "bad"}>{check.ok ? "OK" : "Needed"}</StatusBadge>
+                  </div>
+                  {!check.ok ? <p className="mt-2 text-sm text-white/55">{check.detail}</p> : null}
+                </div>
+              ))}
+            </div>
+            {property.readiness.blocking_issues.length ? (
+              <ul className="mt-5 grid gap-2 text-sm text-amber-100">
+                {property.readiness.blocking_issues.map((issue) => (
+                  <li key={issue} className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2">{issue}</li>
+                ))}
+              </ul>
+            ) : null}
           </Card>
           {property.documents?.length ? (
             <Card>
@@ -159,11 +196,11 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                   <h2 className="text-xl font-semibold text-white">ZSA Tokenization</h2>
                   <p className="mt-1 text-sm text-white/55">No fake issuance. Requests call the configured Django ZSA backend.</p>
                 </div>
-                <StatusBadge tone={zsaConfig?.ready ? "good" : "bad"}>{zsaConfig?.ready ? "Ready" : "ZSA backend is not configured."}</StatusBadge>
+                <StatusBadge tone={property.readiness.zsa.ready ? "good" : "bad"}>{property.readiness.zsa.ready ? "Ready" : "ZSA backend is not configured."}</StatusBadge>
               </div>
-              {!zsaConfig?.ready && zsaConfig?.missing?.length ? (
+              {!property.readiness.zsa.ready && property.readiness.zsa.missing?.length ? (
                 <ul className="mt-4 grid gap-2 text-sm text-amber-100">
-                  {zsaConfig.missing.map((item) => <li key={item} className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2">{item}</li>)}
+                  {property.readiness.zsa.missing.map((item) => <li key={item} className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2">{item}</li>)}
                 </ul>
               ) : null}
               <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
@@ -171,9 +208,25 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                   <span className="text-sm text-white/60">Issuer shielded address</span>
                   <input value={issuerZaddr} onChange={(event) => setIssuerZaddr(event.target.value)} className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white outline-none focus:border-gold/60" />
                 </label>
-                <button disabled={!zsaConfig?.ready} onClick={() => void issueTokenization()} className="rounded-xl bg-gold px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-40">
+                <button disabled={!property.readiness.ready_for_tokenization} onClick={() => void issueTokenization()} className="rounded-xl bg-gold px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-40">
                   Issue ZSA
                 </button>
+              </div>
+            </Card>
+          ) : null}
+          {property.ownership.is_owner ? (
+            <Card>
+              <h2 className="text-xl font-semibold text-white">Available Actions</h2>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {property.status === "tokenized" ? (
+                  <button onClick={() => void runLifecycleAction(`/api/properties/${id}/activate/`)} className="rounded-xl bg-gold px-5 py-3 font-semibold text-ink">Activate</button>
+                ) : null}
+                {property.status === "active" ? (
+                  <button onClick={() => void runLifecycleAction(`/api/properties/${id}/suspend/`)} className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-5 py-3 font-semibold text-amber-100">Suspend</button>
+                ) : null}
+                {property.status !== "archived" ? (
+                  <button onClick={() => void runLifecycleAction(`/api/properties/${id}/archive/`)} className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-3 font-semibold text-white">Archive</button>
+                ) : null}
               </div>
             </Card>
           ) : null}

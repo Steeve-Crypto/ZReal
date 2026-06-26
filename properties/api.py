@@ -10,7 +10,19 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from core.notifications import push_notification
 from .forms import PropertyForm
+from .lifecycle import (
+    PUBLIC_PROPERTY_STATUSES,
+    active_subscription_required,
+    can_attempt_tokenization,
+    can_edit_property,
+    can_upload_documents,
+    evaluate_property_readiness,
+    set_property_status,
+    sync_pre_tokenization_lifecycle,
+    sync_property_from_operation,
+)
 from .models import Property, PropertyDocument, TokenizationOperation
 from .serializers import document_payload, property_payload, tokenization_operation_payload
 from .views import (
@@ -19,14 +31,13 @@ from .views import (
     _issuer_property_or_404,
     _require_issuer,
     _safe_tokenization_metadata,
-    _sync_property_from_operation,
     _extract_field,
 )
 from zcash_integration.zcash_client import ZcashClient, ZcashConfigurationError
 
 
 def visible_property_queryset(user):
-    public_qs = Property.objects.filter(status__in=["tokenized", "active"])
+    public_qs = Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES)
     if user.is_authenticated and getattr(user, "profile", None) and user.profile.is_issuer:
         return Property.objects.filter(owner=user) | public_qs
     return public_qs
@@ -42,7 +53,7 @@ def property_list(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def investor_browse(request):
-    properties = Property.objects.filter(status__in=["tokenized", "active"]).prefetch_related("documents")
+    properties = Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES).prefetch_related("documents")
     return Response({"properties": [property_payload(prop, request.user) for prop in properties]})
 
 
@@ -70,18 +81,32 @@ def create_property(request):
     prop = form.save(commit=False)
     prop.owner = request.user
     prop.save()
-    return Response(property_payload(prop, request.user), status=201)
+    notification = push_notification(request, "success", "Property draft created.")
+    return Response({"property": property_payload(prop, request.user), "notifications": [notification]}, status=201)
 
 
 @api_view(["PATCH", "PUT"])
 @permission_classes([IsAuthenticated])
 def edit_property(request, pk):
     prop = _issuer_property_or_404(request.user, pk)
+    if not can_edit_property(prop):
+        return Response({"error": "Archived properties cannot be edited.", "code": "property_archived"}, status=409)
     form = PropertyForm(request.data, instance=prop)
     if not form.is_valid():
         return Response({"errors": form.errors}, status=400)
     prop = form.save()
-    return Response(property_payload(prop, request.user))
+    transition = sync_pre_tokenization_lifecycle(prop, user=request.user)
+    notifications = [push_notification(request, "success", "Property updated.")]
+    if transition:
+        notifications.append(push_notification(request, "success", transition.message))
+    return Response({"property": property_payload(prop, request.user), "notifications": notifications})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def property_readiness(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    return Response(evaluate_property_readiness(prop, user=request.user))
 
 
 @api_view(["GET"])
@@ -96,6 +121,8 @@ def property_documents(request, pk):
 @parser_classes([MultiPartParser, FormParser])
 def upload_document(request, pk):
     prop = _issuer_property_or_404(request.user, pk)
+    if not can_upload_documents(prop):
+        return Response({"error": "Documents cannot be uploaded in the current property state.", "code": "invalid_lifecycle_state"}, status=409)
     uploaded_file = request.FILES.get("document")
     if not uploaded_file:
         return Response({"error": "No document uploaded."}, status=400)
@@ -140,7 +167,15 @@ def upload_document(request, pk):
         doc.processing_status = "completed"
         doc.processed_at = timezone.now()
         doc.save()
-        return Response(document_payload(doc), status=201)
+        transition = sync_pre_tokenization_lifecycle(prop, user=request.user)
+        notifications = [push_notification(request, "success", "Document uploaded successfully.")]
+        if transition:
+            notifications.append(push_notification(request, "success", transition.message))
+        return Response({
+            "document": document_payload(doc),
+            "property": property_payload(prop, request.user),
+            "notifications": notifications,
+        }, status=201)
     except Exception as exc:
         doc.processing_status = "failed"
         doc.save(update_fields=["processing_status"])
@@ -159,8 +194,23 @@ def zsa_config_readiness(request):
 @permission_classes([IsAuthenticated])
 def issue_property_tokenization(request, pk):
     prop = _issuer_property_or_404(request.user, pk)
-    if settings.REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA and not request.user.profile.has_active_subscription:
+    if active_subscription_required(request.user):
         return Response({"error": "An active issuer subscription is required for tokenization."}, status=403)
+    if not can_attempt_tokenization(prop):
+        return Response({"error": "Property cannot be tokenized in its current lifecycle state.", "code": "invalid_lifecycle_state"}, status=409)
+
+    client = ZcashClient()
+    readiness = evaluate_property_readiness(prop, user=request.user, zsa_report=client.configuration_report())
+    if not readiness["ready_for_tokenization"]:
+        notification = push_notification(request, "warning", "Property is not ready for tokenization.")
+        return Response({
+            "error": "Property is not ready for tokenization.",
+            "code": "not_ready_for_tokenization",
+            "readiness": readiness,
+            "notifications": [notification],
+        }, status=409)
+    sync_pre_tokenization_lifecycle(prop, user=request.user, zsa_report=readiness["zsa"])
+    prop.refresh_from_db()
 
     issuer_zaddr = request.data.get("issuer_zaddr", "").strip()
     if not issuer_zaddr:
@@ -180,15 +230,21 @@ def issue_property_tokenization(request, pk):
     )
 
     try:
-        result = ZcashClient().issue_zsa(
+        set_property_status(prop, "tokenization_pending")
+        result = client.issue_zsa(
             issuer_zaddr=issuer_zaddr,
             asset_symbol=operation.asset_symbol,
             total_shares=prop.total_shares,
             metadata=metadata,
         )
         operation.mark_from_result(result)
-        _sync_property_from_operation(prop, operation)
-        return Response(tokenization_operation_payload(operation, request.user), status=201)
+        sync_property_from_operation(prop, operation)
+        notification = push_notification(request, "success", "Tokenization submitted.")
+        return Response({
+            "operation": tokenization_operation_payload(operation, request.user),
+            "property": property_payload(prop, request.user),
+            "notifications": [notification],
+        }, status=201)
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = "failed"
         operation.error = str(exc)
@@ -196,8 +252,18 @@ def issue_property_tokenization(request, pk):
         operation.save()
         prop.tokenization_status = "failed"
         prop.tokenization_error = str(exc)
-        prop.save(update_fields=["tokenization_status", "tokenization_error", "updated_at"])
-        return Response(tokenization_operation_payload(operation, request.user), status=400)
+        if prop.status == "tokenization_pending":
+            prop.status = "ready_for_tokenization"
+            prop.save(update_fields=["status", "tokenization_status", "tokenization_error", "updated_at"])
+        else:
+            prop.save(update_fields=["tokenization_status", "tokenization_error", "updated_at"])
+        notification = push_notification(request, "error", "Tokenization failed.")
+        return Response({
+            "error": str(exc),
+            "operation": tokenization_operation_payload(operation, request.user),
+            "property": property_payload(prop, request.user),
+            "notifications": [notification],
+        }, status=400)
 
 
 @api_view(["GET"])
@@ -216,12 +282,45 @@ def refresh_tokenization_operation(request, pk):
     try:
         result = ZcashClient().refresh_zsa_status(operation.operation_id)
         operation.mark_from_result(result)
-        _sync_property_from_operation(operation.property, operation)
-        return Response(tokenization_operation_payload(operation, request.user))
+        sync_property_from_operation(operation.property, operation)
+        notification = push_notification(request, "success", "Status refreshed.")
+        return Response({"operation": tokenization_operation_payload(operation, request.user), "notifications": [notification]})
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = "failed"
         operation.error = str(exc)
         operation.failed_at = timezone.now()
         operation.save(update_fields=["status", "error", "failed_at", "updated_at"])
-        _sync_property_from_operation(operation.property, operation)
-        return Response(tokenization_operation_payload(operation, request.user), status=400)
+        sync_property_from_operation(operation.property, operation)
+        notification = push_notification(request, "error", "Tokenization failed.")
+        return Response({"operation": tokenization_operation_payload(operation, request.user), "notifications": [notification]}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def activate_property(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    if prop.status != "tokenized" or not prop.zsa_asset_id:
+        return Response({"error": "Only tokenized properties with a real asset ID can be activated.", "code": "not_activatable"}, status=409)
+    set_property_status(prop, "active")
+    notification = push_notification(request, "success", "Property activated.")
+    return Response({"property": property_payload(prop, request.user), "notifications": [notification]})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def suspend_property(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    if prop.status != "active":
+        return Response({"error": "Only active properties can be suspended.", "code": "not_suspendable"}, status=409)
+    set_property_status(prop, "suspended")
+    notification = push_notification(request, "warning", "Property suspended.")
+    return Response({"property": property_payload(prop, request.user), "notifications": [notification]})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def archive_property(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    set_property_status(prop, "archived")
+    notification = push_notification(request, "warning", "Property archived.")
+    return Response({"property": property_payload(prop, request.user), "notifications": [notification]})

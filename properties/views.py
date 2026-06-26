@@ -14,6 +14,17 @@ from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied as DrfPermissionDenied
 
 from .forms import PropertyForm
+from .lifecycle import (
+    PUBLIC_PROPERTY_STATUSES,
+    active_subscription_required,
+    can_attempt_tokenization,
+    can_edit_property,
+    can_upload_documents,
+    evaluate_property_readiness,
+    set_property_status,
+    sync_pre_tokenization_lifecycle,
+    sync_property_from_operation,
+)
 from .models import Property, PropertyDocument, TokenizationOperation
 from .serializers import PropertySerializer  # Create this if using DRF
 from zcash_integration.zcash_client import ZcashClient, ZcashConfigurationError
@@ -76,17 +87,7 @@ def _masked_zaddr(address):
 
 
 def _sync_property_from_operation(prop, operation):
-    prop.tokenization_status = operation.status
-    prop.zcash_operation_id = operation.operation_id or prop.zcash_operation_id
-    prop.zcash_txid = operation.txid or prop.zcash_txid
-    prop.zsa_asset_id = operation.asset_id or prop.zsa_asset_id
-    prop.tokenization_error = operation.error
-    if operation.status in ['pending', 'broadcast']:
-        prop.status = 'tokenizing'
-    if operation.status == 'confirmed':
-        prop.status = 'tokenized'
-        prop.tokenized_at = operation.confirmed_at or timezone.now()
-    prop.save()
+    sync_property_from_operation(prop, operation)
 
 
 def _issuer_operation_or_404(user, pk):
@@ -105,7 +106,7 @@ def _issuer_operation_or_404(user, pk):
 
 def property_map(request):
     """Interactive map view using Leaflet + OSM (Google Maps free alternative)"""
-    public_properties = Property.objects.filter(status__in=['tokenized', 'active']).order_by('-tokenized_at', '-created_at')
+    public_properties = Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES).order_by('-tokenized_at', '-created_at')
     issuer_only_properties = Property.objects.none()
     is_issuer = (
         request.user.is_authenticated
@@ -114,7 +115,7 @@ def property_map(request):
     )
     if is_issuer:
         issuer_only_properties = Property.objects.filter(owner=request.user).exclude(
-            status__in=['tokenized', 'active']
+            status__in=PUBLIC_PROPERTY_STATUSES
         ).order_by('-created_at')
 
     properties = list(public_properties[:50])
@@ -123,7 +124,7 @@ def property_map(request):
     properties_json = []
 
     for prop in visible_properties:
-        is_public = prop.status in ['tokenized', 'active']
+        is_public = prop.status in PUBLIC_PROPERTY_STATUSES
         properties_json.append({
             'id': prop.id,
             'title': prop.title,
@@ -154,7 +155,7 @@ def property_map(request):
 
 def investor_property_browse(request):
     """Browse only tokenized or active properties available to investors."""
-    properties = Property.objects.filter(status__in=['tokenized', 'active']).order_by('-tokenized_at', '-created_at')
+    properties = Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES).order_by('-tokenized_at', '-created_at')
     return render(request, 'properties/browse.html', {'properties': properties})
 
 
@@ -174,10 +175,16 @@ def property_create(request):
 @login_required
 def property_edit(request, pk):
     prop = _issuer_property_or_404(request.user, pk)
+    if not can_edit_property(prop):
+        messages.error(request, "Archived properties cannot be edited.")
+        return redirect('issuer_dashboard')
     form = PropertyForm(request.POST or None, instance=prop)
     if request.method == 'POST' and form.is_valid():
-        form.save()
+        prop = form.save()
+        transition = sync_pre_tokenization_lifecycle(prop, user=request.user)
         messages.success(request, "Property updated.")
+        if transition:
+            messages.success(request, transition.message)
         return redirect('issuer_dashboard')
     return render(request, 'properties/property_form.html', {'form': form, 'mode': 'Edit', 'property': prop})
 
@@ -187,9 +194,20 @@ def property_edit(request, pk):
 def issue_zsa(request, pk):
     """Issue a real ZSA using the configured ZSA backend/tool."""
     prop = _issuer_property_or_404(request.user, pk)
-    if settings.REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA and not request.user.profile.has_active_subscription:
+    if active_subscription_required(request.user):
         messages.error(request, "An active issuer subscription is required for tokenization.")
         return redirect('issuer_dashboard')
+    if not can_attempt_tokenization(prop):
+        messages.error(request, "Property cannot be tokenized in its current lifecycle state.")
+        return redirect('issuer_dashboard')
+
+    client = ZcashClient()
+    readiness = evaluate_property_readiness(prop, user=request.user, zsa_report=client.configuration_report())
+    if not readiness["ready_for_tokenization"]:
+        messages.error(request, "Property is not ready for tokenization.")
+        return redirect('issuer_dashboard')
+    sync_pre_tokenization_lifecycle(prop, user=request.user, zsa_report=readiness["zsa"])
+    prop.refresh_from_db()
 
     issuer_zaddr = request.POST.get('issuer_zaddr', '').strip()
     if not issuer_zaddr:
@@ -210,7 +228,8 @@ def issue_zsa(request, pk):
     )
 
     try:
-        result = ZcashClient().issue_zsa(
+        set_property_status(prop, "tokenization_pending")
+        result = client.issue_zsa(
             issuer_zaddr=issuer_zaddr,
             asset_symbol=operation.asset_symbol,
             total_shares=prop.total_shares,
@@ -328,7 +347,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated and getattr(self.request.user, 'profile', None):
             if self.request.user.profile.is_issuer:
                 return Property.objects.filter(owner=self.request.user)
-        return Property.objects.filter(status__in=['tokenized', 'active'])
+        return Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES)
 
     def perform_create(self, serializer):
         if not getattr(self.request.user, 'profile', None) or not self.request.user.profile.is_issuer:
@@ -348,6 +367,8 @@ def upload_property_document(request, pk):
         return JsonResponse({"error": "POST required"}, status=405)
     
     prop = _issuer_property_or_404(request.user, pk)
+    if not can_upload_documents(prop):
+        return JsonResponse({"error": "Documents cannot be uploaded in the current property state."}, status=409)
     
     if 'document' not in request.FILES:
         return JsonResponse({"error": "No document uploaded"}, status=400)
@@ -411,6 +432,9 @@ def upload_property_document(request, pk):
         doc.processing_status = 'completed'
         doc.processed_at = timezone.now()
         doc.save()
+        transition = sync_pre_tokenization_lifecycle(prop, user=request.user)
+        if transition:
+            messages.success(request, transition.message)
         
         return JsonResponse({
             "success": True,

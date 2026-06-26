@@ -55,6 +55,12 @@ export default function IssuerDashboardPage() {
               </ul>
             ) : null}
           </Card>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ActionGroup title="Needs Documents" properties={data.action_groups.needs_documents} empty="No draft properties waiting on documents." />
+            <ActionGroup title="Ready For Tokenization" properties={data.action_groups.ready_for_tokenization} empty="No properties are ready for tokenization yet." />
+            <ActionGroup title="Waiting For Confirmation" properties={data.action_groups.waiting_for_confirmation} empty="No pending tokenization operations." />
+            <ActionGroup title="Failed Tokenization" properties={data.action_groups.failed_tokenization} empty="No failed tokenization operations." tone="bad" />
+          </div>
           {data.properties.length ? (
             <div className="grid gap-4">
               {data.properties.map((property) => (
@@ -77,5 +83,38 @@ export default function IssuerDashboardPage() {
         </div>
       ) : null}
     </Shell>
+  );
+}
+
+function ActionGroup({
+  title,
+  properties,
+  empty,
+  tone = "neutral"
+}: {
+  title: string;
+  properties: IssuerDashboard["properties"];
+  empty: string;
+  tone?: "neutral" | "bad";
+}) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <StatusBadge tone={tone === "bad" && properties.length ? "bad" : "neutral"}>{properties.length}</StatusBadge>
+      </div>
+      {properties.length ? (
+        <div className="mt-4 grid gap-3">
+          {properties.slice(0, 4).map((property) => (
+            <Link key={property.id} href={`/properties/${property.id}`} className="rounded-xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-gold/40">
+              <div className="font-medium text-white">{property.title}</div>
+              <div className="mt-1 text-sm text-white/50">{property.readiness.next_action.replaceAll("_", " ")}</div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-white/50">{empty}</p>
+      )}
+    </Card>
   );
 }

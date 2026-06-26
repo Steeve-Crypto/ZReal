@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 
 from .forms import RoleSelectionForm
 from .models import UserProfile
+from properties.lifecycle import PUBLIC_PROPERTY_STATUSES
 from zcash_integration.zcash_client import ZcashClient
 
 
@@ -138,7 +139,7 @@ def issuer_dashboard(request):
         'documents',
     )
     total_estimated_value = my_properties.aggregate(total=Sum('estimated_value'))['total']
-    tokenized_count = my_properties.filter(status__in=['tokenized', 'active']).count()
+    tokenized_count = my_properties.filter(status__in=PUBLIC_PROPERTY_STATUSES).count()
     zsa_issued_count = my_properties.exclude(zsa_asset_id__isnull=True).exclude(zsa_asset_id='').count()
     zsa_config = ZcashClient().configuration_report()
 
@@ -205,7 +206,7 @@ def investor_portfolio(request):
         'profile': profile,
         'investments': investments,
         'investment_count': investments.count(),
-        'available_property_count': Property.objects.filter(status__in=['tokenized', 'active']).count(),
+        'available_property_count': Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES).count(),
         'holdings': holdings,
         'total_portfolio_value': total_portfolio_value,
         'total_portfolio_value_display': _money_display(total_portfolio_value) if has_portfolio_value else "No data yet",

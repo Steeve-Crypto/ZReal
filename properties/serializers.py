@@ -3,6 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from .models import Property
+from .lifecycle import can_attempt_tokenization, can_edit_property, can_upload_documents, evaluate_property_readiness
 
 
 SAFE_EXTRACTED_KEYS = ("detected_address", "detected_size", "ocr_used")
@@ -66,8 +67,14 @@ def tokenization_operation_payload(operation, user):
     return payload
 
 
-def property_payload(prop, user=None):
+def _latest_operation_payload(prop, user):
+    operation = prop.tokenization_operations.first()
+    return tokenization_operation_payload(operation, user) if operation else None
+
+
+def property_payload(prop, user=None, zsa_report=None):
     is_owner = bool(user and user.is_authenticated and prop.owner_id == user.id)
+    readiness = evaluate_property_readiness(prop, user=user, zsa_report=zsa_report)
     return {
         "id": prop.id,
         "title": prop.title,
@@ -82,6 +89,12 @@ def property_payload(prop, user=None):
         "total_shares": prop.total_shares,
         "status": prop.status,
         "status_display": prop.get_status_display(),
+        "lifecycle": {
+            "status": prop.status,
+            "status_display": prop.get_status_display(),
+            "next_action": readiness["next_action"],
+        },
+        "readiness": readiness,
         "tokenization": {
             "status": prop.tokenization_status,
             "status_display": prop.get_tokenization_status_display(),
@@ -91,20 +104,21 @@ def property_payload(prop, user=None):
             "error": prop.tokenization_error or None,
             "tokenized_at": prop.tokenized_at.isoformat() if prop.tokenized_at else None,
         },
+        "latest_tokenization_operation": _latest_operation_payload(prop, user),
         "document_count": prop.documents.count() if hasattr(prop, "documents") else 0,
         "created_at": prop.created_at.isoformat() if prop.created_at else None,
         "updated_at": prop.updated_at.isoformat() if prop.updated_at else None,
         "ownership": {
             "is_owner": is_owner,
-            "can_edit": is_owner,
-            "can_upload_documents": is_owner,
-            "can_tokenize": is_owner,
+            "can_edit": is_owner and can_edit_property(prop),
+            "can_upload_documents": is_owner and can_upload_documents(prop),
+            "can_tokenize": is_owner and can_attempt_tokenization(prop),
         },
     }
 
 
-def dashboard_property_payload(prop, user):
-    payload = property_payload(prop, user)
+def dashboard_property_payload(prop, user, zsa_report=None):
+    payload = property_payload(prop, user, zsa_report=zsa_report)
     payload["documents"] = [document_payload(doc) for doc in prop.documents.all()]
     payload["tokenization_operations"] = [
         tokenization_operation_payload(operation, user)

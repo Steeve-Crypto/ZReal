@@ -6,7 +6,7 @@ import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell } from "@/components/ui";
 import { PropertyForm, cleanPropertyPayload, valuesFromProperty } from "@/components/property-form";
 import { ApiError, apiGet, apiJson } from "@/lib/api";
-import type { PropertyRecord } from "@/types/api";
+import type { PropertyMutationResponse, PropertyRecord } from "@/types/api";
 
 export default function EditPropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,8 +44,8 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
             onSubmit={async (values) => {
               setError(null);
               try {
-                const updated = await apiJson<PropertyRecord>(`/api/properties/${id}/edit/`, "PATCH", cleanPropertyPayload(values));
-                router.push(`/properties/${updated.id}`);
+                const response = await apiJson<PropertyMutationResponse>(`/api/properties/${id}/edit/`, "PATCH", cleanPropertyPayload(values));
+                router.push(`/properties/${response.property.id}`);
               } catch (err) {
                 if (err instanceof ApiError && err.data) setError(JSON.stringify(err.data));
                 else setError(err instanceof Error ? err.message : "Could not update property.");

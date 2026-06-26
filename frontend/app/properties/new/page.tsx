@@ -6,7 +6,7 @@ import { ProductNav } from "@/components/nav";
 import { Card, Shell } from "@/components/ui";
 import { PropertyForm, cleanPropertyPayload, valuesFromProperty } from "@/components/property-form";
 import { ApiError, apiJson, djangoLoginUrl } from "@/lib/api";
-import type { PropertyRecord } from "@/types/api";
+import type { PropertyMutationResponse } from "@/types/api";
 
 export default function NewPropertyPage() {
   const router = useRouter();
@@ -27,8 +27,8 @@ export default function NewPropertyPage() {
           onSubmit={async (values) => {
             setError(null);
             try {
-              const property = await apiJson<PropertyRecord>("/api/properties/new/", "POST", cleanPropertyPayload(values));
-              router.push(`/properties/${property.id}`);
+              const response = await apiJson<PropertyMutationResponse>("/api/properties/new/", "POST", cleanPropertyPayload(values));
+              router.push(`/properties/${response.property.id}`);
             } catch (err) {
               if (err instanceof ApiError && err.status === 403) {
                 setError(`Issuer role and Django login are required. Login: ${djangoLoginUrl("/properties/new")}`);

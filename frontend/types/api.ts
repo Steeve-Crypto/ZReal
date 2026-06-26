@@ -26,6 +26,27 @@ export type ZsaConfig = {
   safe_display: Record<string, unknown>;
 };
 
+export type NotificationRecord = {
+  level: "success" | "warning" | "error" | "info";
+  message: string;
+};
+
+export type ReadinessCheck = {
+  key: string;
+  label: string;
+  ok: boolean;
+  required: boolean;
+  detail: string;
+};
+
+export type PropertyReadiness = {
+  ready_for_tokenization: boolean;
+  checks: ReadinessCheck[];
+  blocking_issues: string[];
+  zsa: ZsaConfig;
+  next_action: string;
+};
+
 export type TokenizationSummary = {
   status: string;
   status_display: string;
@@ -50,7 +71,14 @@ export type PropertyRecord = {
   total_shares: number;
   status: string;
   status_display: string;
+  lifecycle: {
+    status: string;
+    status_display: string;
+    next_action: string;
+  };
+  readiness: PropertyReadiness;
   tokenization: TokenizationSummary;
+  latest_tokenization_operation: TokenizationOperation | null;
   document_count: number;
   created_at: string | null;
   updated_at: string | null;
@@ -62,6 +90,18 @@ export type PropertyRecord = {
   };
   documents?: DocumentRecord[];
   tokenization_operations?: TokenizationOperation[];
+};
+
+export type PropertyMutationResponse = {
+  property: PropertyRecord;
+  notifications: NotificationRecord[];
+};
+
+export type TokenizationMutationResponse = {
+  operation: TokenizationOperation;
+  property?: PropertyRecord;
+  notifications: NotificationRecord[];
+  error?: string;
 };
 
 export type DocumentRecord = {
@@ -111,6 +151,13 @@ export type IssuerDashboard = {
   };
   zsa_config: ZsaConfig;
   properties: PropertyRecord[];
+  action_groups: {
+    needs_documents: PropertyRecord[];
+    ready_for_tokenization: PropertyRecord[];
+    waiting_for_confirmation: PropertyRecord[];
+    recently_tokenized: PropertyRecord[];
+    failed_tokenization: PropertyRecord[];
+  };
 };
 
 export type InvestorDashboard = {

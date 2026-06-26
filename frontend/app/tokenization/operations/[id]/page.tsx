@@ -4,13 +4,14 @@ import { use, useEffect, useState } from "react";
 import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
 import { ApiError, apiGet, apiJson } from "@/lib/api";
-import type { TokenizationOperation } from "@/types/api";
+import type { TokenizationMutationResponse, TokenizationOperation } from "@/types/api";
 
 export default function TokenizationOperationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [operation, setOperation] = useState<TokenizationOperation | null>(null);
   const [error, setError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   async function loadOperation() {
@@ -25,9 +26,11 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
   async function refreshStatus() {
     setRefreshing(true);
     setActionError(null);
+    setActionMessage(null);
     try {
-      const updated = await apiJson<TokenizationOperation>(`/api/tokenization/operations/${id}/refresh/`, "POST", {});
-      setOperation(updated);
+      const response = await apiJson<TokenizationMutationResponse>(`/api/tokenization/operations/${id}/refresh/`, "POST", {});
+      setOperation(response.operation);
+      setActionMessage(response.notifications.map((item) => item.message).join(" "));
     } catch (err) {
       if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
       else setActionError(err instanceof Error ? err.message : "Could not refresh tokenization status.");
@@ -58,6 +61,7 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
             </div>
           </header>
           {actionError ? <div className="rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100">{actionError}</div> : null}
+          {actionMessage ? <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{actionMessage}</div> : null}
           <Card>
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <div><dt className="text-white/40">Backend</dt><dd>{operation.backend}</dd></div>

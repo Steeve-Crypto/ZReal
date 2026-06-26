@@ -11,6 +11,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
+from core.notifications import drain_notifications
+from properties.lifecycle import PUBLIC_PROPERTY_STATUSES
 from properties.models import Property, PropertyInvestment
 from properties.serializers import dashboard_property_payload, investment_payload
 from zcash_integration.zcash_client import ZcashClient
@@ -30,6 +32,12 @@ def api_health(request):
 @permission_classes([AllowAny])
 def csrf_token(request):
     return Response({"csrfToken": get_token(request)})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notifications(request):
+    return Response({"notifications": drain_notifications(request)})
 
 
 @api_view(["GET"])
@@ -82,15 +90,32 @@ def issuer_dashboard(request):
     total_estimated_value = properties.aggregate(total=Sum("estimated_value"))["total"]
     zsa_config = ZcashClient().configuration_report()
 
+    property_payloads = [dashboard_property_payload(prop, request.user, zsa_report=zsa_config) for prop in properties]
+
+    def by_status(*statuses):
+        return [payload for payload in property_payloads if payload["status"] in statuses]
+
+    failed_tokenizations = [
+        payload for payload in property_payloads
+        if payload["tokenization"]["status"] == "failed"
+    ]
+
     return Response({
         "metrics": {
             "property_count": properties.count(),
-            "tokenized_count": properties.filter(status__in=["tokenized", "active"]).count(),
+            "tokenized_count": properties.filter(status__in=PUBLIC_PROPERTY_STATUSES).count(),
             "total_estimated_value": money_value(total_estimated_value),
             "zsa_issued_count": properties.exclude(zsa_asset_id__isnull=True).exclude(zsa_asset_id="").count(),
         },
         "zsa_config": zsa_config,
-        "properties": [dashboard_property_payload(prop, request.user) for prop in properties],
+        "properties": property_payloads,
+        "action_groups": {
+            "needs_documents": by_status("draft"),
+            "ready_for_tokenization": by_status("ready_for_tokenization"),
+            "waiting_for_confirmation": by_status("tokenization_pending"),
+            "recently_tokenized": by_status("tokenized", "active")[:5],
+            "failed_tokenization": failed_tokenizations,
+        },
     })
 
 
@@ -116,7 +141,7 @@ def investor_dashboard(request):
     return Response({
         "metrics": {
             "investment_count": investments.count(),
-            "available_property_count": Property.objects.filter(status__in=["tokenized", "active"]).count(),
+            "available_property_count": Property.objects.filter(status__in=PUBLIC_PROPERTY_STATUSES).count(),
             "total_portfolio_value": str(total_portfolio_value) if has_portfolio_value else None,
         },
         "holdings": holdings,

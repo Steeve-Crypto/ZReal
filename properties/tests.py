@@ -33,6 +33,19 @@ def make_property(owner, **overrides):
     return Property.objects.create(**data)
 
 
+def make_completed_document(prop, **overrides):
+    data = {
+        "property": prop,
+        "file": "property_documents/deed.pdf",
+        "document_type": "Deed",
+        "file_sha256": "a" * 64,
+        "extracted_data": {"detected_address": prop.address, "detected_size": str(prop.size_sqm)},
+        "processing_status": "completed",
+    }
+    data.update(overrides)
+    return PropertyDocument.objects.create(**data)
+
+
 class ZcashClientOutputTest(SimpleTestCase):
     def test_invalid_tool_json_fails_safely(self):
         with self.assertRaises(ZcashToolOutputError):
@@ -117,20 +130,25 @@ class ZsaIssuanceViewTest(TestCase):
 
     @patch("properties.views.ZcashClient")
     def test_successful_mocked_zsa_creates_operation_with_safe_metadata(self, mock_client_class):
-        PropertyDocument.objects.create(
-            property=self.property,
-            file="property_documents/deed.pdf",
-            document_type="Deed",
-            file_sha256="a" * 64,
+        make_completed_document(
+            self.property,
             extracted_text="Full legal text must not be copied into tokenization metadata.",
             extracted_data={
                 "detected_address": "456 Token Ave",
                 "detected_size": "120",
                 "detected_owner": "Sensitive Owner Name",
             },
-            processing_status="completed",
         )
         mock_client = MagicMock()
+        mock_client.configuration_report.return_value = {
+            "ready": True,
+            "configured": True,
+            "missing": [],
+            "warnings": [],
+            "backend": "zcash_tx_tool",
+            "method": "zcash_tx_tool",
+            "safe_display": {},
+        }
         mock_client.issue_zsa.return_value = {
             "status": "confirmed",
             "operation_id": "real-operation-id-from-mock",
@@ -159,18 +177,17 @@ class ZsaIssuanceViewTest(TestCase):
 
     @override_settings(ZCASH_TX_TOOL_PATH="")
     @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
-    def test_missing_zsa_configuration_records_failed_operation(self, _which):
+    def test_missing_zsa_configuration_blocks_before_operation(self, _which):
+        make_completed_document(self.property)
         response = self.client.post(
             f"/properties/{self.property.pk}/issue-zsa/",
             {"issuer_zaddr": "ztestsapling1testaddress"},
         )
 
         self.assertEqual(response.status_code, 302)
-        operation = TokenizationOperation.objects.get(property=self.property)
-        self.assertEqual(operation.status, "failed")
-        self.assertIn("ZCASH_TX_TOOL_PATH", operation.error)
+        self.assertFalse(TokenizationOperation.objects.filter(property=self.property).exists())
         self.property.refresh_from_db()
-        self.assertEqual(self.property.tokenization_status, "failed")
+        self.assertEqual(self.property.tokenization_status, "not_started")
 
     @patch("properties.views.ZcashClient")
     def test_status_refresh_updates_pending_operation(self, mock_client_class):
@@ -186,6 +203,7 @@ class ZsaIssuanceViewTest(TestCase):
         )
         self.property.tokenization_status = "pending"
         self.property.zcash_operation_id = "op-123"
+        self.property.status = "tokenization_pending"
         self.property.save()
 
         mock_client = MagicMock()
@@ -500,7 +518,8 @@ class ProductApiTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["title"], "API Created Property")
+        self.assertEqual(response.json()["property"]["title"], "API Created Property")
+        self.assertEqual(response.json()["notifications"][0]["message"], "Property draft created.")
         self.assertTrue(Property.objects.filter(owner=issuer, title="API Created Property").exists())
 
     def test_property_edit_api_requires_owner(self):
@@ -557,6 +576,7 @@ class ProductApiTest(TestCase):
         self.assertEqual(response.status_code, 200)
         prop.refresh_from_db()
         self.assertEqual(prop.title, "After Owner Edit")
+        self.assertEqual(response.json()["property"]["title"], "After Owner Edit")
 
     @patch("properties.api.pdfplumber")
     def test_document_upload_api_stores_hash_and_safe_metadata(self, mock_pdfplumber):
@@ -582,10 +602,130 @@ class ProductApiTest(TestCase):
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        self.assertEqual(data["document_type"], "Title")
-        self.assertEqual(data["processing_status"], "completed")
-        self.assertIn("document_hash", data)
-        self.assertIn("detected_address", data["safe_extracted_metadata"])
+        self.assertEqual(data["document"]["document_type"], "Title")
+        self.assertEqual(data["document"]["processing_status"], "completed")
+        self.assertIn("document_hash", data["document"])
+        self.assertIn("detected_address", data["document"]["safe_extracted_metadata"])
+        prop.refresh_from_db()
+        self.assertIn(prop.status, {"documents_uploaded", "ready_for_review"})
+
+    @override_settings(ZCASH_TX_TOOL_PATH="", ZCASH_RPC_URL="")
+    @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
+    def test_property_readiness_api_reports_blockers(self, _which):
+        issuer = make_user("api_readiness_issuer", "issuer")
+        prop = make_property(issuer, estimated_value=None)
+        client = Client()
+        client.login(username="api_readiness_issuer", password="pass")
+
+        response = client.get(f"/api/properties/{prop.pk}/readiness/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["ready_for_tokenization"])
+        self.assertIn("blocking_issues", data)
+        self.assertIn("Configure the real Zcash/ZSA backend before issuance.", data["blocking_issues"])
+
+    def test_archived_property_cannot_be_edited(self):
+        issuer = make_user("api_archived_issuer", "issuer")
+        prop = make_property(issuer, status="archived")
+        client = Client()
+        client.login(username="api_archived_issuer", password="pass")
+
+        response = client.patch(
+            f"/api/properties/{prop.pk}/edit/",
+            data={
+                "title": "Archived Edit",
+                "description": prop.description,
+                "address": prop.address,
+                "latitude": str(prop.latitude),
+                "longitude": str(prop.longitude),
+                "size_sqm": str(prop.size_sqm),
+                "bedrooms": "",
+                "bathrooms": "",
+                "estimated_value": str(prop.estimated_value),
+                "total_shares": str(prop.total_shares),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "property_archived")
+
+    def test_property_cannot_activate_before_tokenization(self):
+        issuer = make_user("api_activate_blocked_issuer", "issuer")
+        prop = make_property(issuer, status="ready_for_tokenization")
+        client = Client()
+        client.login(username="api_activate_blocked_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/activate/")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "not_activatable")
+
+    def test_tokenized_property_can_activate(self):
+        issuer = make_user("api_activate_issuer", "issuer")
+        prop = make_property(issuer, status="tokenized", zsa_asset_id="real-asset-id")
+        client = Client()
+        client.login(username="api_activate_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/activate/")
+
+        self.assertEqual(response.status_code, 200)
+        prop.refresh_from_db()
+        self.assertEqual(prop.status, "active")
+        self.assertEqual(response.json()["property"]["status"], "active")
+
+    def test_notifications_are_session_backed_and_drainable(self):
+        issuer = make_user("api_notify_issuer", "issuer")
+        client = Client()
+        client.login(username="api_notify_issuer", password="pass")
+
+        create_response = client.post(
+            "/api/properties/new/",
+            data={
+                "title": "Notification Property",
+                "description": "",
+                "address": "Notify Address",
+                "latitude": "",
+                "longitude": "",
+                "size_sqm": "100",
+                "bedrooms": "",
+                "bathrooms": "",
+                "estimated_value": "",
+                "total_shares": "1000",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+
+        drain_response = client.get("/api/notifications/")
+        self.assertEqual(drain_response.status_code, 200)
+        self.assertEqual(drain_response.json()["notifications"][0]["message"], "Property draft created.")
+        second_drain = client.get("/api/notifications/")
+        self.assertEqual(second_drain.json()["notifications"], [])
+
+    def test_property_detail_includes_tokenization_history(self):
+        issuer = make_user("api_history_issuer", "issuer")
+        prop = make_property(issuer)
+        TokenizationOperation.objects.create(
+            property=prop,
+            issuer=issuer,
+            issuer_zaddr="ztestsapling1testaddress123456789",
+            asset_symbol="ZREAL-PROP-HISTORY",
+            total_shares=prop.total_shares,
+            backend="zcash_tx_tool",
+            status="failed",
+            error="backend unavailable",
+        )
+        client = Client()
+        client.login(username="api_history_issuer", password="pass")
+
+        response = client.get(f"/api/properties/{prop.pk}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["tokenization_operations"][0]["status"], "failed")
+        self.assertEqual(data["latest_tokenization_operation"]["status"], "failed")
 
     def test_issuer_dashboard_api_returns_real_property_metrics(self):
         issuer = make_user("api_issuer_dashboard", "issuer")
@@ -600,6 +740,7 @@ class ProductApiTest(TestCase):
         self.assertEqual(data["metrics"]["property_count"], 1)
         self.assertEqual(data["metrics"]["total_estimated_value"], "250000")
         self.assertEqual(data["properties"][0]["title"], "Issuer API Property")
+        self.assertIn("action_groups", data)
 
     def test_investor_dashboard_api_returns_real_holdings(self):
         issuer = make_user("api_holdings_issuer", "issuer")
@@ -674,9 +815,10 @@ class ProductApiTest(TestCase):
 
     @override_settings(ZCASH_TX_TOOL_PATH="", ZCASH_RPC_URL="")
     @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
-    def test_tokenization_api_missing_config_records_failed_operation(self, _which):
+    def test_tokenization_api_missing_config_blocks_without_operation(self, _which):
         issuer = make_user("api_tokenize_issuer", "issuer")
         prop = make_property(issuer)
+        make_completed_document(prop)
         client = Client()
         client.login(username="api_tokenize_issuer", password="pass")
 
@@ -686,17 +828,27 @@ class ProductApiTest(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         data = response.json()
-        self.assertEqual(data["status"], "failed")
-        self.assertIn("ZCASH_TX_TOOL_PATH", data["error"])
-        self.assertEqual(TokenizationOperation.objects.filter(property=prop).count(), 1)
+        self.assertEqual(data["code"], "not_ready_for_tokenization")
+        self.assertFalse(data["readiness"]["ready_for_tokenization"])
+        self.assertEqual(TokenizationOperation.objects.filter(property=prop).count(), 0)
 
     @patch("properties.api.ZcashClient")
     def test_successful_mocked_tokenization_api_returns_operation(self, mock_client_class):
         issuer = make_user("api_tokenize_success_issuer", "issuer")
         prop = make_property(issuer)
+        make_completed_document(prop)
         mock_client = MagicMock()
+        mock_client.configuration_report.return_value = {
+            "ready": True,
+            "configured": True,
+            "missing": [],
+            "warnings": [],
+            "backend": "zcash_tx_tool",
+            "method": "zcash_tx_tool",
+            "safe_display": {},
+        }
         mock_client.issue_zsa.return_value = {
             "status": "confirmed",
             "operation_id": "real-api-operation",
@@ -716,9 +868,11 @@ class ProductApiTest(TestCase):
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        self.assertEqual(data["status"], "confirmed")
-        self.assertEqual(data["operation_id"], "real-api-operation")
-        self.assertEqual(data["asset_id"], "real-api-asset")
+        self.assertEqual(data["operation"]["status"], "confirmed")
+        self.assertEqual(data["operation"]["operation_id"], "real-api-operation")
+        self.assertEqual(data["operation"]["asset_id"], "real-api-asset")
+        prop.refresh_from_db()
+        self.assertEqual(prop.status, "tokenized")
 
     def test_tokenization_operation_api_hides_raw_response_for_non_staff(self):
         issuer = make_user("api_operation_issuer", "issuer")
