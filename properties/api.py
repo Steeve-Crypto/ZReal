@@ -2,6 +2,9 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+import pdfplumber
+import pytesseract
+from PIL import Image
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -114,7 +117,6 @@ def upload_document(request, pk):
         extracted_text = ""
         extracted_data = {}
         if uploaded_file.name.lower().endswith(".pdf"):
-            import pdfplumber
             with pdfplumber.open(doc.file.path) as pdf:
                 for page in pdf.pages:
                     text = page.extract_text()
@@ -124,8 +126,6 @@ def upload_document(request, pk):
                     if tables:
                         extracted_data["tables"] = extracted_data.get("tables", []) + tables
         else:
-            import pytesseract
-            from PIL import Image
             image = Image.open(doc.file.path)
             extracted_text = pytesseract.image_to_string(image)
             extracted_data["ocr_used"] = True

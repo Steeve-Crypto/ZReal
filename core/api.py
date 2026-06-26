@@ -3,6 +3,7 @@ import os
 import tempfile
 
 from django.conf import settings
+from django.middleware.csrf import get_token
 from django.db import connection, connections
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Sum
@@ -23,6 +24,12 @@ def money_value(value):
 @permission_classes([AllowAny])
 def api_health(request):
     return Response({"status": "ok"})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def csrf_token(request):
+    return Response({"csrfToken": get_token(request)})
 
 
 @api_view(["GET"])

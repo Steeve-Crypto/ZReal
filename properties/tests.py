@@ -43,6 +43,20 @@ class ZcashClientOutputTest(SimpleTestCase):
             ZcashClient()._parse_tool_output('{"status":"confirmed","txid":"tx123"}')
 
 
+class HealthEndpointTest(SimpleTestCase):
+    def test_health_endpoint_without_trailing_slash_returns_ok(self):
+        response = Client().get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_health_endpoint_with_trailing_slash_returns_ok(self):
+        response = Client().get("/health/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
+
 class DocumentUploadTest(TestCase):
     def setUp(self):
         self.media_dir = tempfile.TemporaryDirectory()
@@ -457,6 +471,122 @@ class BillingConfigTest(TestCase):
 
 
 class ProductApiTest(TestCase):
+    def test_csrf_endpoint_returns_token(self):
+        response = Client().get("/api/csrf/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrfToken", response.json())
+
+    def test_property_create_api_requires_issuer_and_creates_property(self):
+        issuer = make_user("api_create_issuer", "issuer")
+        client = Client()
+        client.login(username="api_create_issuer", password="pass")
+
+        response = client.post(
+            "/api/properties/new/",
+            data={
+                "title": "API Created Property",
+                "description": "",
+                "address": "API Address",
+                "latitude": "",
+                "longitude": "",
+                "size_sqm": "100",
+                "bedrooms": "",
+                "bathrooms": "",
+                "estimated_value": "",
+                "total_shares": "1000",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["title"], "API Created Property")
+        self.assertTrue(Property.objects.filter(owner=issuer, title="API Created Property").exists())
+
+    def test_property_edit_api_requires_owner(self):
+        issuer = make_user("api_edit_issuer", "issuer")
+        other = make_user("api_edit_other", "issuer")
+        prop = make_property(issuer, title="Before Edit")
+        client = Client()
+        client.login(username="api_edit_other", password="pass")
+
+        response = client.patch(
+            f"/api/properties/{prop.pk}/edit/",
+            data={
+                "title": "After Edit",
+                "description": prop.description,
+                "address": prop.address,
+                "latitude": str(prop.latitude),
+                "longitude": str(prop.longitude),
+                "size_sqm": str(prop.size_sqm),
+                "bedrooms": "",
+                "bathrooms": "",
+                "estimated_value": str(prop.estimated_value),
+                "total_shares": str(prop.total_shares),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        prop.refresh_from_db()
+        self.assertEqual(prop.title, "Before Edit")
+
+    def test_property_edit_api_updates_owner_property(self):
+        issuer = make_user("api_edit_owner", "issuer")
+        prop = make_property(issuer, title="Before Owner Edit")
+        client = Client()
+        client.login(username="api_edit_owner", password="pass")
+
+        response = client.patch(
+            f"/api/properties/{prop.pk}/edit/",
+            data={
+                "title": "After Owner Edit",
+                "description": prop.description,
+                "address": prop.address,
+                "latitude": str(prop.latitude),
+                "longitude": str(prop.longitude),
+                "size_sqm": str(prop.size_sqm),
+                "bedrooms": "",
+                "bathrooms": "",
+                "estimated_value": str(prop.estimated_value),
+                "total_shares": str(prop.total_shares),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        prop.refresh_from_db()
+        self.assertEqual(prop.title, "After Owner Edit")
+
+    @patch("properties.api.pdfplumber")
+    def test_document_upload_api_stores_hash_and_safe_metadata(self, mock_pdfplumber):
+        media_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(media_dir.cleanup)
+        issuer = make_user("api_upload_issuer", "issuer")
+        prop = make_property(issuer)
+        mock_pdf = MagicMock()
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = "Address: API Upload Address\nSize: 88 sqm\nOwner: Recorded Owner"
+        mock_page.extract_tables.return_value = []
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber.open.return_value.__enter__.return_value = mock_pdf
+        client = Client()
+        client.login(username="api_upload_issuer", password="pass")
+
+        with override_settings(MEDIA_ROOT=media_dir.name):
+            uploaded = SimpleUploadedFile("property_upload.pdf", b"%PDF-1.4 api", content_type="application/pdf")
+            response = client.post(
+                f"/api/properties/{prop.pk}/documents/upload/",
+                {"document": uploaded, "document_type": "Title"},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["document_type"], "Title")
+        self.assertEqual(data["processing_status"], "completed")
+        self.assertIn("document_hash", data)
+        self.assertIn("detected_address", data["safe_extracted_metadata"])
+
     def test_issuer_dashboard_api_returns_real_property_metrics(self):
         issuer = make_user("api_issuer_dashboard", "issuer")
         make_property(issuer, title="Issuer API Property", estimated_value=Decimal("250000.00"))
@@ -561,6 +691,34 @@ class ProductApiTest(TestCase):
         self.assertEqual(data["status"], "failed")
         self.assertIn("ZCASH_TX_TOOL_PATH", data["error"])
         self.assertEqual(TokenizationOperation.objects.filter(property=prop).count(), 1)
+
+    @patch("properties.api.ZcashClient")
+    def test_successful_mocked_tokenization_api_returns_operation(self, mock_client_class):
+        issuer = make_user("api_tokenize_success_issuer", "issuer")
+        prop = make_property(issuer)
+        mock_client = MagicMock()
+        mock_client.issue_zsa.return_value = {
+            "status": "confirmed",
+            "operation_id": "real-api-operation",
+            "txid": "real-api-txid",
+            "asset_id": "real-api-asset",
+            "backend": "zcash_tx_tool",
+        }
+        mock_client_class.return_value = mock_client
+        client = Client()
+        client.login(username="api_tokenize_success_issuer", password="pass")
+
+        response = client.post(
+            f"/api/properties/{prop.pk}/tokenize/",
+            data={"issuer_zaddr": "ztestsapling1testaddress"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["status"], "confirmed")
+        self.assertEqual(data["operation_id"], "real-api-operation")
+        self.assertEqual(data["asset_id"], "real-api-asset")
 
     def test_tokenization_operation_api_hides_raw_response_for_non_staff(self):
         issuer = make_user("api_operation_issuer", "issuer")

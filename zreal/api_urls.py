@@ -6,6 +6,7 @@ from properties import api as property_api
 
 urlpatterns = [
     path("health/", core_api.api_health, name="api_health"),
+    path("csrf/", core_api.csrf_token, name="api_csrf"),
     path("me/", core_api.current_user, name="api_current_user"),
     path("role/", core_api.role_status, name="api_role_status"),
     path("dashboard/issuer/", core_api.issuer_dashboard, name="api_issuer_dashboard"),

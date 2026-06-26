@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, Gauge, Map, ShieldCheck } from "lucide-react";
+import { Building2, Gauge, Map, Plus, ShieldCheck, UserCircle } from "lucide-react";
 
 export function ProductNav() {
   return (
@@ -17,6 +17,8 @@ export function ProductNav() {
         <Link className="nav-pill" href="/issuer/dashboard"><Gauge size={16} />Issuer</Link>
         <Link className="nav-pill" href="/investor/dashboard"><Building2 size={16} />Investor</Link>
         <Link className="nav-pill" href="/properties"><Map size={16} />Browse</Link>
+        <Link className="nav-pill" href="/properties/new"><Plus size={16} />Create</Link>
+        <Link className="nav-pill" href="/account"><UserCircle size={16} />Account</Link>
       </div>
     </nav>
   );

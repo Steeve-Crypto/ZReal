@@ -136,6 +136,7 @@ Local frontend development uses Django session authentication.
 2. Start Next.js at `http://127.0.0.1:3000`.
 3. Sign in through Django allauth at `http://127.0.0.1:8000/accounts/login/`.
 4. The frontend API client calls Django with `credentials: "include"`.
+5. Unsafe frontend requests call `GET /api/csrf/` first and send `X-CSRFToken`.
 
 The backend permits local frontend origins through `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`.
 
@@ -151,6 +152,7 @@ Production must configure:
 Frontend-facing API endpoints are mounted under `/api/`:
 
 - `GET /api/health/`
+- `GET /api/csrf/`
 - `GET /api/me/`
 - `GET/PATCH /api/role/`
 - `GET /api/dashboard/issuer/`
@@ -190,25 +192,30 @@ No private keys should be stored in ZReal. The external ZSA backend/tool is resp
 
 ## Manual QA Script
 
-1. Install dependencies: `py -3 -m pip install -r requirements.txt`.
+1. Install backend dependencies: `py -3 -m pip install -r requirements.txt`.
 2. Run migrations: `py -3 manage.py migrate`.
-3. Start the server: `py -3 manage.py runserver 127.0.0.1:8000`.
-4. Open `http://127.0.0.1:8000/accounts/signup/`.
-5. Create an account with your own email and password.
-6. Choose the issuer role at `http://127.0.0.1:8000/profile/role/`.
-7. Open `http://127.0.0.1:8000/issuer/dashboard/`.
-8. Create a property using real property information you are authorized to use.
-9. Upload a real legal/property document through Legal Shield.
-10. Confirm the upload response shows extracted safe fields and the document hash exists in Django admin or the database.
-11. Attempt tokenization only after the dashboard reports ZSA readiness. Without config, the UI should explain the missing values instead of offering a blind issue button.
-12. Open `http://127.0.0.1:8000/zcash/zsa-config/validate/` while logged in as issuer to inspect structured validation JSON.
-13. Configure the ZSA environment variables listed above, restart the server, and re-open the validation endpoint.
-14. Submit tokenization with a real issuer shielded address.
-15. Open the tokenization operation detail link from the dashboard.
-16. Refresh status from the operation detail page.
-17. Confirm operation history shows real operation IDs, txids, asset IDs, statuses, timestamps, and any backend errors.
-18. Create or log into an investor account and open `http://127.0.0.1:8000/properties/browse/`.
-19. Confirm no draft properties are shown. If no real tokenized properties exist, the page should say: `No tokenized properties are available yet.`
+3. Start Django: `py -3 manage.py runserver 127.0.0.1:8000`.
+4. Install frontend dependencies: `cd frontend && npm install`.
+5. Start Next.js: `npm run dev`.
+6. Open `http://127.0.0.1:8000/accounts/signup/`.
+7. Create an account with your own email and password.
+8. Open `http://127.0.0.1:3000/account`.
+9. Confirm the frontend shows the authenticated profile.
+10. Choose the issuer role in the frontend.
+11. Open `http://127.0.0.1:3000/properties/new`.
+12. Create a property using real property information you are authorized to use.
+13. Open the created property detail page.
+14. Edit the property from the frontend and confirm the saved values reload.
+15. Upload a real legal/property document from the property detail page.
+16. Confirm the frontend shows document hash, processing status, and safe metadata only.
+17. Inspect ZSA readiness on the property detail page.
+18. Attempt tokenization with missing ZSA config and confirm the clear blocked/error state.
+19. Configure the ZSA environment variables listed above if you have a real backend.
+20. Submit tokenization with a real issuer shielded address.
+21. Open the tokenization operation detail page.
+22. Refresh operation status and confirm the page shows real operation IDs, txids, asset IDs, timestamps, and backend errors.
+23. Create or log into an investor account and open `http://127.0.0.1:3000/properties`.
+24. Confirm no draft properties are shown. If no real tokenized properties exist, the page should say: `No tokenized properties are available yet.`
 
 For the staff-only local setup checklist, create or use a staff/superuser account and open:
 
