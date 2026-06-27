@@ -1,3 +1,5 @@
+import builtins
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
@@ -19,7 +21,7 @@ class Property(models.Model):
     ]
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_properties')
-    title = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     address = models.CharField(max_length=500)
     
@@ -28,7 +30,7 @@ class Property(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     plot_geojson = models.JSONField(default=dict, blank=True, help_text="Optional plot boundary GeoJSON")
     
-    size_sqm = models.FloatField(help_text="Total size in square meters")
+    size_sqm = models.FloatField(null=True, blank=True, help_text="Total size in square meters")
     bedrooms = models.PositiveIntegerField(null=True, blank=True)
     bathrooms = models.PositiveIntegerField(null=True, blank=True)
     estimated_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -56,6 +58,61 @@ class Property(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class PropertyEnrichment(models.Model):
+    """Reviewable provider-derived property data, kept separate until confirmed."""
+
+    STATUS_CHOICES = [
+        ("not_started", "Not Started"),
+        ("pending", "Pending"),
+        ("enriched", "Enriched"),
+        ("needs_review", "Needs Review"),
+        ("failed", "Failed"),
+    ]
+
+    property = models.OneToOneField(Property, on_delete=models.CASCADE, related_name="enrichment")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="not_started")
+    provider = models.CharField(max_length=64, blank=True)
+    data_source = models.CharField(max_length=128, blank=True)
+    source_record_id = models.CharField(max_length=255, blank=True)
+
+    normalized_address = models.CharField(max_length=500, blank=True)
+    address_line_1 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=128, blank=True)
+    state = models.CharField(max_length=64, blank=True)
+    postal_code = models.CharField(max_length=32, blank=True)
+    country = models.CharField(max_length=64, blank=True, default="US")
+    county = models.CharField(max_length=128, blank=True)
+    jurisdiction = models.CharField(max_length=128, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    parcel_id = models.CharField(max_length=128, blank=True)
+    apn = models.CharField(max_length=128, blank=True)
+    lot_size = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    building_area = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    year_built = models.PositiveIntegerField(null=True, blank=True)
+    property_type = models.CharField(max_length=128, blank=True)
+    assessed_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    tax_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+
+    match_confidence = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    candidates = models.JSONField(default=list, blank=True)
+    safe_payload = models.JSONField(default=dict, blank=True)
+    retrieved_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="confirmed_property_enrichments")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    @builtins.property
+    def is_confirmed(self):
+        return bool(self.confirmed_at)
 
 
 class TokenizationOperation(models.Model):

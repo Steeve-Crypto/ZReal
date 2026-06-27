@@ -88,6 +88,7 @@ The current property lifecycle is:
 Readiness blocks tokenization unless:
 
 - at least one completed document with a SHA-256 hash exists
+- any attempted property data autofill has been reviewed and confirmed
 - estimated value is present
 - total shares is valid
 - the owner has issuer role
@@ -95,6 +96,8 @@ Readiness blocks tokenization unless:
 - ZSA backend configuration is ready
 
 Missing or invalid ZSA configuration blocks before a `TokenizationOperation` is created. If configuration is ready and the external tool is invoked, then tool/runtime failure is recorded as a failed operation.
+
+Address enrichment never auto-tokenizes a property. Low-confidence or multi-candidate matches are marked `needs_review` and block tokenization readiness until the issuer confirms the reviewed data.
 
 ## Local Verification
 
@@ -118,4 +121,5 @@ Mocked tests prove app-side behavior only. They do not prove native ZSA issuance
 - one successful end-to-end testnet issuance
 - real investor purchase/settlement flow
 - human review workflow
+- live property data provider licensing and production integration
 - production deployment, HTTPS, secrets, media storage, logging, and backups

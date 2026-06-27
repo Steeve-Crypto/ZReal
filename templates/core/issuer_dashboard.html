@@ -109,13 +109,13 @@
                 <div class="flex items-start justify-between gap-4 mb-5">
                     <div>
                         <div class="uppercase tracking-[2px] text-xs font-medium text-white/50">ZSA Configuration</div>
-                        <h3 class="text-2xl font-semibold tracking-tight mt-1">{{ zsa_config.backend|default:"Not configured" }}</h3>
+                        <h3 class="text-2xl font-semibold tracking-tight mt-1">{% if zsa_config.ready %}Issuance configuration complete{% else %}Configuration incomplete{% endif %}</h3>
                         <p class="text-sm text-white/60 mt-1">Network: <span class="font-mono">{{ zsa_config.network|default:"Missing" }}</span></p>
                     </div>
                     {% if zsa_config.ready %}
                         <span class="status-badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Ready</span>
                     {% else %}
-                        <span class="status-badge bg-red-500/10 text-red-300 border border-red-500/30">Not Ready</span>
+                        <span class="status-badge bg-red-500/10 text-red-300 border border-red-500/30">Setup Required</span>
                     {% endif %}
                 </div>
 
@@ -150,8 +150,8 @@
                 {% endif %}
 
                 <a href="{% url 'validate_zsa_configuration' %}" class="inline-flex items-center gap-x-2 mt-5 text-sm text-[#D4AF37] hover:text-[#f0d471]">
-                    <i class="fas fa-code"></i>
-                    <span>View validation JSON</span>
+                    <i class="fas fa-list-check"></i>
+                    <span>Review setup checklist</span>
                 </a>
             </div>
 

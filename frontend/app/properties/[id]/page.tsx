@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
-import { ApiError, apiGet, apiJson, apiUpload } from "@/lib/api";
+import { ApiError, apiGet, apiJson, apiUpload, userFacingError } from "@/lib/api";
 import type { PropertyMutationResponse, PropertyRecord, TokenizationMutationResponse } from "@/types/api";
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +45,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
       setSelectedFile(null);
       await loadProperty();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Document upload failed.");
+      setActionError(userFacingError(err, "Document upload failed."));
     } finally {
       setUploading(false);
     }
@@ -73,7 +73,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
         const data = err.data as { error?: string; readiness?: { blocking_issues?: string[] } };
         setActionError(data.error ?? data.readiness?.blocking_issues?.join(" ") ?? err.message);
       }
-      else setActionError(err instanceof Error ? err.message : "Tokenization request failed.");
+      else setActionError(userFacingError(err, "Tokenization request failed."));
       await loadProperty();
     }
   }
@@ -86,8 +86,20 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
       setProperty(response.property);
       setActionMessage(response.notifications.map((item) => item.message).join(" "));
     } catch (err) {
-      if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
-      else setActionError(err instanceof Error ? err.message : "Lifecycle action failed.");
+      setActionError(userFacingError(err, "Lifecycle action failed."));
+      await loadProperty().catch(() => undefined);
+    }
+  }
+
+  async function confirmEnrichment() {
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const response = await apiJson<PropertyMutationResponse>(`/api/properties/${id}/confirm-enrichment/`, "POST", {});
+      setProperty(response.property);
+      setActionMessage(response.notifications.map((item) => item.message).join(" "));
+    } catch (err) {
+      setActionError(userFacingError(err, "Could not confirm autofill."));
       await loadProperty().catch(() => undefined);
     }
   }
@@ -117,9 +129,40 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div><dt className="text-white/40">Total shares</dt><dd>{property.total_shares}</dd></div>
               <div><dt className="text-white/40">Documents</dt><dd>{property.document_count}</dd></div>
               <div><dt className="text-white/40">Tokenization</dt><dd>{property.tokenization.status_display}</dd></div>
-              <div><dt className="text-white/40">Txid</dt><dd className="break-all">{property.tokenization.txid ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Transaction ID</dt><dd className="break-all">{property.tokenization.txid ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{property.tokenization.asset_id ?? "No data yet"}</dd></div>
             </dl>
+          </Card>
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Property Data</h2>
+                <p className="mt-1 text-sm text-white/55">{property.enrichment.normalized_address ?? property.address}</p>
+              </div>
+              <StatusBadge tone={property.enrichment.is_confirmed ? "good" : property.enrichment.status === "failed" ? "bad" : property.enrichment.status === "needs_review" || property.enrichment.status === "enriched" ? "warn" : "neutral"}>
+                {property.enrichment.is_confirmed ? "Confirmed" : property.enrichment.status.replaceAll("_", " ")}
+              </StatusBadge>
+            </div>
+            <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+              <div><dt className="text-white/40">Provider</dt><dd>{property.enrichment.provider ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Confidence</dt><dd>{property.enrichment.match_confidence ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Source</dt><dd>{property.enrichment.data_source ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Coordinates</dt><dd>{property.latitude && property.longitude ? `${property.latitude}, ${property.longitude}` : "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Parcel/APN</dt><dd>{property.enrichment.parcel_id ?? property.enrichment.apn ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">County</dt><dd>{property.enrichment.county ?? "No data yet"}</dd></div>
+            </dl>
+            {property.enrichment.warnings.length || property.enrichment.blockers.length ? (
+              <div className="mt-5 grid gap-2 text-sm text-amber-100">
+                {[...property.enrichment.warnings, ...property.enrichment.blockers].map((item) => (
+                  <div key={item} className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2">{item}</div>
+                ))}
+              </div>
+            ) : null}
+            {property.ownership.can_edit && property.enrichment.status !== "not_started" && !property.enrichment.is_confirmed && property.enrichment.status !== "failed" ? (
+              <div className="mt-5 flex justify-end">
+                <button onClick={() => void confirmEnrichment()} className="rounded-xl bg-gold px-5 py-3 font-semibold text-ink">Confirm autofill</button>
+              </div>
+            ) : null}
           </Card>
           {property.latest_tokenization_operation ? (
             <Card>
@@ -134,7 +177,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               </div>
               <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
                 <div><dt className="text-white/40">Operation ID</dt><dd className="break-all">{property.latest_tokenization_operation.operation_id ?? "No data yet"}</dd></div>
-                <div><dt className="text-white/40">Txid</dt><dd className="break-all">{property.latest_tokenization_operation.txid ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Transaction ID</dt><dd className="break-all">{property.latest_tokenization_operation.txid ?? "No data yet"}</dd></div>
                 <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{property.latest_tokenization_operation.asset_id ?? "No data yet"}</dd></div>
                 <div><dt className="text-white/40">Created</dt><dd>{property.latest_tokenization_operation.created_at ?? "No data yet"}</dd></div>
                 <div><dt className="text-white/40">Last refresh</dt><dd>{property.latest_tokenization_operation.last_status_refreshed_at ?? "No data yet"}</dd></div>
@@ -197,7 +240,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
           {property.ownership.can_upload_documents ? (
             <Card>
               <h2 className="text-xl font-semibold text-white">Upload Document</h2>
-              <p className="mt-1 text-sm text-white/55">Upload a real PDF or image. The frontend displays hash/status and safe extracted metadata only.</p>
+              <p className="mt-1 text-sm text-white/55">Upload a PDF or image. ZReal displays document status and verified metadata only.</p>
               <div className="mt-5 grid gap-4 md:grid-cols-[0.7fr_1.3fr_auto] md:items-end">
                 <label className="grid gap-2">
                   <span className="text-sm text-white/60">Document type</span>
@@ -218,9 +261,9 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-white">ZSA Tokenization</h2>
-                  <p className="mt-1 text-sm text-white/55">No fake issuance. Requests call the configured Django ZSA backend.</p>
+                  <p className="mt-1 text-sm text-white/55">Submit issuance only after readiness checks are complete.</p>
                 </div>
-                <StatusBadge tone={property.readiness.zsa.ready ? "good" : "bad"}>{property.readiness.zsa.ready ? "Ready" : "ZSA backend is not configured."}</StatusBadge>
+                <StatusBadge tone={property.readiness.zsa.ready ? "good" : "bad"}>{property.readiness.zsa.ready ? "Ready" : "Setup required"}</StatusBadge>
               </div>
               {!property.readiness.zsa.ready && property.readiness.zsa.missing?.length ? (
                 <ul className="mt-4 grid gap-2 text-sm text-amber-100">

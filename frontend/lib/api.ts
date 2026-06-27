@@ -93,3 +93,31 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
 export function djangoLoginUrl(nextPath: string): string {
   return `${API_BASE_URL}/accounts/login/?next=${encodeURIComponent(nextPath)}`;
 }
+
+function collectMessages(value: unknown): string[] {
+  if (!value) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectMessages);
+  if (typeof value === "object") {
+    const data = value as Record<string, unknown>;
+    if (typeof data.error === "string") return [data.error];
+    if (typeof data.detail === "string") return [data.detail];
+    if (Array.isArray(data.blocking_issues)) return collectMessages(data.blocking_issues);
+    if (data.readiness) return collectMessages((data.readiness as Record<string, unknown>).blocking_issues);
+    if (data.errors && typeof data.errors === "object") {
+      return Object.entries(data.errors as Record<string, unknown>).flatMap(([field, messages]) =>
+        collectMessages(messages).map((message) => `${field}: ${message}`)
+      );
+    }
+    if (Array.isArray(data.warnings)) return collectMessages(data.warnings);
+  }
+  return [];
+}
+
+export function userFacingError(err: unknown, fallback = "Something went wrong. Please try again."): string {
+  if (err instanceof ApiError) {
+    const messages = collectMessages(err.data);
+    return messages.length ? messages.join(" ") : err.message || fallback;
+  }
+  return err instanceof Error && err.message ? err.message : fallback;
+}

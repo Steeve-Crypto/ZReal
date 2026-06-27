@@ -19,7 +19,7 @@ PROPERTY_STATUSES = (
 )
 
 PUBLIC_PROPERTY_STATUSES = ("tokenized", "active")
-EDIT_BLOCKED_STATUSES = ("archived",)
+EDIT_BLOCKED_STATUSES = ("archived", "suspended", "tokenization_pending", "tokenized", "active")
 TOKENIZATION_BLOCKED_STATUSES = ("tokenization_pending", "tokenized", "active", "suspended", "archived")
 
 VALID_TRANSITIONS = {
@@ -73,6 +73,12 @@ def evaluate_property_readiness(prop, user=None, zsa_report=None):
     has_documents = property_has_required_documents(prop)
     has_estimated_value = bool(prop.estimated_value and prop.estimated_value > 0)
     has_valid_shares = bool(prop.total_shares and prop.total_shares > 0)
+    enrichment = getattr(prop, "enrichment", None)
+    enrichment_requires_review = bool(
+        enrichment
+        and enrichment.status in ("pending", "enriched", "needs_review")
+        and not enrichment.confirmed_at
+    )
     issuer_role_valid = bool(profile and profile.is_issuer)
     requester_can_issue = bool(is_owner and requester_profile and requester_profile.is_issuer)
     zsa_ready = bool(zsa_report.get("ready"))
@@ -81,9 +87,15 @@ def evaluate_property_readiness(prop, user=None, zsa_report=None):
         _check("required_documents_present", "Required documents present", has_documents, "At least one completed document with a SHA-256 hash is required."),
         _check("estimated_value_present", "Estimated value present", has_estimated_value, "Estimated value must be greater than zero."),
         _check("share_count_valid", "Share count valid", has_valid_shares, "Total shares must be greater than zero."),
+        _check(
+            "property_data_reviewed",
+            "Property data reviewed",
+            not enrichment_requires_review,
+            "Autofilled property data must be reviewed and confirmed before tokenization.",
+        ),
         _check("issuer_role_valid", "Issuer role valid", issuer_role_valid, "The property owner must have the issuer role."),
         _check("ownership_valid", "Ownership valid", requester_can_issue, "Only the issuer owner can tokenize this property."),
-        _check("zsa_backend_configured", "ZSA backend configured", zsa_ready, "Configure the real Zcash/ZSA backend before issuance."),
+        _check("zsa_backend_configured", "Tokenization setup complete", zsa_ready, "Tokenization setup is incomplete. Contact an administrator or complete setup before issuance."),
     ]
 
     lifecycle_blockers = []
@@ -114,6 +126,8 @@ def evaluate_property_readiness(prop, user=None, zsa_report=None):
         next_action = "issue_tokenization"
     elif not has_documents:
         next_action = "upload_documents"
+    elif enrichment_requires_review:
+        next_action = "review_property_enrichment"
     elif not has_estimated_value or not has_valid_shares:
         next_action = "complete_property_details"
     elif not zsa_ready:
@@ -195,6 +209,10 @@ def sync_property_from_operation(prop, operation):
 
 def can_edit_property(prop):
     return prop.status not in EDIT_BLOCKED_STATUSES
+
+
+def can_enrich_property(prop):
+    return can_edit_property(prop)
 
 
 def can_upload_documents(prop):

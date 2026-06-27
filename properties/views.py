@@ -26,7 +26,7 @@ from .lifecycle import (
     sync_property_from_operation,
 )
 from .models import Property, PropertyDocument, TokenizationOperation
-from .serializers import PropertySerializer  # Create this if using DRF
+from .serializers import PropertySerializer, safe_operation_error
 from zcash_integration.zcash_client import ZcashClient, ZcashConfigurationError
 
 
@@ -224,7 +224,7 @@ def issue_zsa(request, pk):
             metadata=metadata,
         )
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
-        messages.error(request, f"ZSA backend configuration is invalid: {client.safe_error_message(exc)}")
+        messages.error(request, f"Tokenization setup is incomplete: {client.safe_error_message(exc)}")
         return redirect('issuer_dashboard')
 
     operation = TokenizationOperation.objects.create(
@@ -249,7 +249,7 @@ def issue_zsa(request, pk):
         operation.mark_from_result(result)
 
         _sync_property_from_operation(prop, operation)
-        messages.success(request, "Tokenization request submitted to the configured ZSA backend.")
+        messages.success(request, "Tokenization request submitted.")
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = 'failed'
         operation.error = client.safe_error_message(exc)
@@ -300,6 +300,7 @@ def tokenization_operation_detail(request, pk):
         'operation': operation,
         'property': operation.property,
         'issuer_zaddr_masked': _masked_zaddr(operation.issuer_zaddr),
+        'operation_error': safe_operation_error(operation.error),
         'metadata_pretty': json.dumps(operation.metadata or {}, indent=2, sort_keys=True),
         'response_pretty': json.dumps(operation.response or {}, indent=2, sort_keys=True),
         'can_refresh': bool(operation.operation_id and operation.status in ['pending', 'broadcast', 'failed']),

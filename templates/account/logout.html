@@ -2,7 +2,7 @@
 
 {% block title %}Sign Out | ZReal{% endblock %}
 {% block auth_title %}Sign out{% endblock %}
-{% block auth_subtitle %}<p class="mt-2 text-sm text-slate-400">End this Django session for ZReal.</p>{% endblock %}
+{% block auth_subtitle %}<p class="mt-2 text-sm text-slate-400">End your secure ZReal session.</p>{% endblock %}
 
 {% block auth_content %}
 <form method="post" action="{% url 'account_logout' %}" class="space-y-5">
@@ -11,7 +11,7 @@
         <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
     {% endif %}
     <p class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-slate-300">
-        You are about to sign out. Product API requests from the Next.js frontend will no longer have an authenticated session.
+        You are about to sign out of ZReal on this device.
     </p>
     <button class="w-full rounded-2xl border border-red-400/30 bg-red-400/10 px-5 py-3 font-semibold text-red-100" type="submit">
         Sign out

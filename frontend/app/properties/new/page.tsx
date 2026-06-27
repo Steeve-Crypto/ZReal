@@ -31,7 +31,7 @@ export default function NewPropertyPage() {
               router.push(`/properties/${response.property.id}`);
             } catch (err) {
               if (err instanceof ApiError && err.status === 403) {
-                setError(`Issuer role and Django login are required. Login: ${djangoLoginUrl("/properties/new")}`);
+                setError(`Issuer access is required. Sign in: ${djangoLoginUrl("/properties/new")}`);
               } else {
                 setError(err instanceof Error ? err.message : "Could not create property.");
               }

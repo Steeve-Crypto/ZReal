@@ -25,11 +25,11 @@ export default function InvestorDashboardPage() {
       <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-4xl font-semibold text-white">Investor Dashboard</h1>
-          <p className="mt-2 text-white/55">Real investment records only. No activity feed filler.</p>
+          <p className="mt-2 text-white/55">Review your tokenized property positions and available opportunities.</p>
         </div>
-        <a className="nav-pill" href={djangoLoginUrl("/investor/dashboard/")}>Django login</a>
+        <a className="nav-pill" href={djangoLoginUrl("/investor/dashboard/")}>Sign in</a>
       </header>
-      {error ? <EmptyState title={error} detail="Choose the investor role in Django after signing in." /> : null}
+      {error ? <EmptyState title={error} detail="Sign in and choose investor access from your account settings." /> : null}
       {data ? (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
@@ -42,7 +42,7 @@ export default function InvestorDashboardPage() {
               {data.holdings.map((holding) => <Stat key={holding.id} label={holding.property.title} value={holding.estimated_position_value} detail={`${holding.shares_owned} shares`} />)}
             </div>
           ) : (
-            <EmptyState title="No investments yet." detail="Holdings appear here only when real investment records exist in Django." />
+            <EmptyState title="No holdings yet." detail="Tokenized property positions will appear here after purchase." />
           )}
         </div>
       ) : null}

@@ -32,7 +32,7 @@
                 window.location.href = data.url;
                 return;
             }
-            window.alert('Error starting checkout: ' + (data.error || 'Unknown error'));
+            window.alert(data.error || 'Checkout could not be started. Please try again.');
         } catch (error) {
             window.alert('Network error. Please try again.');
         }
@@ -80,7 +80,7 @@
             const data = await response.json();
 
             if (!data.success) {
-                result.innerHTML = `<div class="text-red-400 p-4">Error: ${data.error || 'Upload failed.'}</div>`;
+                result.innerHTML = `<div class="text-red-400 p-4">${data.error || 'Upload failed.'}</div>`;
                 return;
             }
 

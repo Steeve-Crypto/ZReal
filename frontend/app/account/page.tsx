@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
-import { ApiError, apiGet, apiJson, djangoLoginUrl } from "@/lib/api";
+import { ApiError, apiGet, apiJson, userFacingError } from "@/lib/api";
 import type { CurrentUser } from "@/types/api";
 
 type RoleStatus = {
@@ -28,7 +28,7 @@ export default function AccountPage() {
       setRole(currentRole);
       setError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) setError("Sign in through Django to use the product frontend.");
+      if (err instanceof ApiError && err.status === 403) setError("Sign in to manage your ZReal account.");
       else setError("Could not load profile state.");
     }
   }
@@ -44,7 +44,7 @@ export default function AccountPage() {
       setRole(updated);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update role.");
+      setError(userFacingError(err, "Could not update role."));
     } finally {
       setSaving(false);
     }
@@ -55,10 +55,10 @@ export default function AccountPage() {
       <ProductNav />
       <header className="mb-8">
         <h1 className="text-4xl font-semibold text-white">Account</h1>
-        <p className="mt-2 text-white/55">Django session state and role selection for the Next product UI.</p>
+        <p className="mt-2 text-white/55">Manage your profile and choose how you use ZReal.</p>
       </header>
       {error ? (
-        <EmptyState title={error} detail={`Login URL: ${djangoLoginUrl("/account")}`} />
+        <EmptyState title={error} detail="Sign in to continue to your account workspace." />
       ) : null}
       {user && role ? (
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">

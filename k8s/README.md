@@ -23,7 +23,7 @@ kubectl apply -f k8s/namespace.yaml
 kubectl create secret generic zreal-secrets --namespace zreal ...
 ```
 
-Use `SECRET_REQUIREMENTS.md` for the exact key list. Do not commit a Secret manifest containing credentials or placeholder values.
+Use `SECRET_REQUIREMENTS.md` for the exact key list. Do not commit a Secret manifest containing credentials or example values.
 
 ## Apply
 

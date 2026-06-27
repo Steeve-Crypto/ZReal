@@ -29,9 +29,9 @@ export default function SetupStatusPage() {
       <ProductNav />
       <header className="mb-8">
         <h1 className="text-4xl font-semibold text-white">Setup Status</h1>
-        <p className="mt-2 text-white/55">Staff-only backend readiness checks. No secret values are displayed.</p>
+        <p className="mt-2 text-white/55">Staff-only configuration checks. Secret values are never displayed.</p>
       </header>
-      {blocked ? <EmptyState title="Staff access required." detail="Sign in through Django admin to view setup status." /> : null}
+      {blocked ? <EmptyState title="Staff access required." detail="Sign in with a staff account to view setup status." /> : null}
       {status ? (
         <Card>
           <div className="grid gap-3 sm:grid-cols-2">

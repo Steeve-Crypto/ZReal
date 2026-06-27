@@ -3,6 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from .models import Property
+from .enrichment import enrichment_to_payload
 from .lifecycle import can_attempt_tokenization, can_edit_property, can_upload_documents, evaluate_property_readiness
 
 
@@ -20,6 +21,20 @@ def masked_zaddr(address):
 def safe_document_metadata(document):
     data = document.extracted_data or {}
     return {key: data[key] for key in SAFE_EXTRACTED_KEYS if key in data and data[key]}
+
+
+def safe_operation_error(error):
+    if not error:
+        return None
+    replacements = {
+        "Backend not configured": "Tokenization setup is incomplete.",
+        "backend unavailable": "Tokenization service is temporarily unavailable.",
+        "backend failed": "Tokenization service is temporarily unavailable.",
+    }
+    message = str(error)
+    for raw, safe in replacements.items():
+        message = message.replace(raw, safe)
+    return message
 
 
 def document_payload(document):
@@ -52,7 +67,7 @@ def tokenization_operation_payload(operation, user):
         "txid": operation.txid or None,
         "asset_id": operation.asset_id or None,
         "safe_metadata": operation.metadata or {},
-        "error": operation.error or None,
+        "error": safe_operation_error(operation.error),
         "created_at": operation.created_at.isoformat() if operation.created_at else None,
         "updated_at": operation.updated_at.isoformat() if operation.updated_at else None,
         "broadcast_at": operation.broadcast_at.isoformat() if operation.broadcast_at else None,
@@ -80,6 +95,7 @@ def property_payload(prop, user=None, zsa_report=None):
         "title": prop.title,
         "description": prop.description,
         "address": prop.address,
+        "normalized_address": getattr(getattr(prop, "enrichment", None), "normalized_address", "") or None,
         "latitude": str(prop.latitude) if prop.latitude is not None else None,
         "longitude": str(prop.longitude) if prop.longitude is not None else None,
         "size_sqm": prop.size_sqm,
@@ -95,6 +111,7 @@ def property_payload(prop, user=None, zsa_report=None):
             "next_action": readiness["next_action"],
         },
         "readiness": readiness,
+        "enrichment": enrichment_to_payload(getattr(prop, "enrichment", None)),
         "tokenization": {
             "status": prop.tokenization_status,
             "status_display": prop.get_tokenization_status_display(),

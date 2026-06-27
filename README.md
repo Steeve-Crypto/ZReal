@@ -6,13 +6,14 @@ The intended architecture is:
 - Django: backend, admin, database, auth, property/document/tokenization logic, ZSA integration boundary, tests
 - Next.js: product frontend for issuers and investors
 
-The app currently supports:
+Implemented today:
 - user signup/login through django-allauth
 - role selection: investor or issuer
 - staff-only local setup/status checklist
 - issuer-facing ZSA configuration validation
-- issuer dashboards backed by real database values
+- issuer dashboards sourced from application records
 - issuer property create/edit flows
+- address-first property data autofill with reviewable provider provenance
 - document upload and text extraction for issuer-owned properties
 - tokenization operation detail/history pages
 - investor browse page that shows only tokenized or active properties
@@ -20,10 +21,10 @@ The app currently supports:
 - auditable ZSA tokenization attempts
 - safe document-to-tokenization metadata using document hashes, document types, timestamps, and selected structured fields
 - Stripe checkout integration when Stripe keys are configured
-- JSON API endpoints for the product frontend
-- a separate Next.js frontend scaffold in `frontend/`
+- JSON endpoints for the product frontend
+- a Next.js frontend in `frontend/`
 
-ZReal does **not** fake tokenization. ZSA issuance only runs when you configure a real external ZSA-capable backend/tool. If required configuration is missing or invalid, tokenization is blocked before operation creation. If the configured tool runs and fails, ZReal records a failed operation with a safe error message.
+ZSA issuance only runs when you configure an external ZSA-capable tool. If required configuration is missing or invalid, tokenization is blocked before operation creation. If the configured tool runs and fails, ZReal records a failed operation with a safe error message.
 
 ## Install
 
@@ -81,6 +82,22 @@ STRIPE_ISSUER_PRICE_ID=price_...
 DJSTRIPE_WEBHOOK_SECRET=whsec_...
 REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA=0
 ```
+
+Property data enrichment defaults to fixture mode for local development and CI:
+
+```env
+PROPERTY_DATA_PROVIDER=mock
+PROPERTY_DATA_ENABLE_LIVE_CALLS=0
+PROPERTY_DATA_API_KEY=
+PROPERTY_DATA_REGRID_API_KEY=
+PROPERTY_DATA_OPENCAGE_API_KEY=
+PROPERTY_DATA_GOOGLE_API_KEY=
+REGRID_API_KEY=
+OPENCAGE_API_KEY=
+GOOGLE_GEOCODING_API_KEY=
+```
+
+Supported provider modes are `mock`, `fixture`, `census`, `regrid`, `opencage`, and `google`. `mock`/`fixture` return local fixture data for tests and development checks. `census` can resolve live addresses only when `PROPERTY_DATA_ENABLE_LIVE_CALLS=1`. Regrid, OpenCage, and Google are keyed provider interfaces until live integration and licensing are approved; the shorter `REGRID_API_KEY`, `OPENCAGE_API_KEY`, and `GOOGLE_GEOCODING_API_KEY` aliases are also accepted.
 
 ## Run
 
@@ -163,9 +180,13 @@ Frontend-facing API endpoints are mounted under `/api/`:
 - `GET /api/setup/status/` staff only
 - `GET /api/properties/`
 - `GET /api/properties/browse/`
+- `POST /api/properties/resolve-address/`
 - `POST /api/properties/new/`
 - `GET /api/properties/<id>/`
 - `PATCH/PUT /api/properties/<id>/edit/`
+- `POST /api/properties/<id>/enrich/`
+- `GET /api/properties/<id>/enrichment/`
+- `POST /api/properties/<id>/confirm-enrichment/`
 - `GET /api/properties/<id>/documents/`
 - `POST /api/properties/<id>/documents/upload/`
 - `GET /api/zsa/config/`
@@ -173,7 +194,7 @@ Frontend-facing API endpoints are mounted under `/api/`:
 - `GET /api/tokenization/operations/<id>/`
 - `POST /api/tokenization/operations/<id>/refresh/`
 
-The API returns real database-backed data only. Empty states are represented as empty arrays or `null` values.
+The product endpoints return persisted application data. Empty states are represented as empty arrays or `null` values.
 
 ## Tokenization Flow
 
@@ -182,16 +203,16 @@ The API returns real database-backed data only. Empty states are represented as 
 3. Issuer creates a property.
 4. Issuer uploads legal/property documents.
 5. ZReal stores the document and its SHA-256 hash, then extracts local structured metadata.
-6. Issuer checks ZSA readiness on the dashboard or via `/zcash/zsa-config/validate/`.
+6. Issuer checks ZSA readiness on the dashboard or staff setup/configuration views.
 7. If configuration is missing, ZReal blocks blind issuance in the dashboard and reports the missing values.
 8. If configuration is ready, issuer enters a shielded issuer address and submits `Issue ZSA`.
 9. ZReal creates a `TokenizationOperation` audit record.
 10. ZReal attaches safe metadata: property ID, asset symbol, total shares, document types, document SHA-256 hashes, timestamps, and selected non-text extracted fields.
-11. ZReal calls the configured ZSA backend command.
+11. ZReal calls the configured ZSA issuance command.
 12. ZReal stores real returned `operation_id`, `txid`, `asset_id`, status, and errors.
 13. Pending operations can be refreshed from the dashboard or operation detail page.
 
-No private keys should be stored in ZReal. The external ZSA backend/tool is responsible for signing and broadcasting.
+No private keys should be stored in ZReal. The external ZSA-capable tool is responsible for signing and broadcasting.
 
 ## Manual QA Script
 
@@ -204,20 +225,20 @@ No private keys should be stored in ZReal. The external ZSA backend/tool is resp
 7. Create an account with your own email and password.
 8. Sign out and sign back in at `http://127.0.0.1:8000/accounts/login/?next=/profile/role/` to confirm the `next` redirect is preserved.
 9. Open `http://127.0.0.1:3000/account`.
-10. Confirm the frontend shows the authenticated profile through Django session auth.
+10. Confirm the frontend shows the authenticated profile.
 11. Choose the issuer role in the frontend.
 12. Open `http://127.0.0.1:3000/properties/new`.
-13. Create a property using real property information you are authorized to use.
+13. Enter a property address, run `Autofill property details`, review the normalized address/source/confidence, then create the draft.
 14. Open the created property detail page.
-15. Edit the property from the frontend and confirm the saved values reload.
+15. Edit the property from the frontend, run saved-property enrichment if needed, confirm autofill, and confirm the saved values reload.
 16. Upload a real legal/property document from the property detail page.
 17. Confirm the frontend shows document hash, processing status, and safe metadata only.
 18. Inspect ZSA readiness on the property detail page.
 19. Attempt tokenization with missing ZSA config and confirm the clear blocked/error state.
-20. Configure the ZSA environment variables listed above if you have a real backend.
+20. Configure the ZSA environment variables listed above if you have issuance tooling.
 21. Submit tokenization with a real issuer shielded address.
 22. Open the tokenization operation detail page.
-23. Refresh operation status and confirm the page shows real operation IDs, txids, asset IDs, timestamps, and backend errors.
+23. Refresh operation status and confirm the page shows operation IDs, txids, asset IDs, timestamps, and safe errors.
 24. Create or log into an investor account and open `http://127.0.0.1:3000/properties`.
 25. Confirm no draft properties are shown. If no real tokenized properties exist, the page should say: `No tokenized properties are available yet.`
 
@@ -233,18 +254,19 @@ http://127.0.0.1:8000/setup/status/
 - SQLite local development
 - auth and role selection
 - issuer property management
+- provider-agnostic property data enrichment foundation with fixture mode
 - ownership-protected document upload
 - PDF/image text extraction path
 - local setup/status checklist
 - ZSA configuration validation endpoint
-- database-backed dashboards
+- dashboard metrics from persisted records
 - frontend API layer
 - Next.js product frontend scaffold
 - investor tokenized-property browsing
 - property map
 - tokenization audit model
 - tokenization operation detail/status refresh pages
-- real external ZSA tool integration boundary
+- external ZSA tool integration boundary
 - tests for document upload, tokenization success/failure/status refresh, permissions, investor holdings, and Stripe missing configuration
 
 ## Pending
@@ -252,5 +274,20 @@ http://127.0.0.1:8000/setup/status/
 - a real native ZSA backend/tool must be supplied and configured
 - richer investor purchase flow
 - real rental/dividend distribution model
+- live parcel/geocoder provider integrations beyond fixture mode
 - production hardening for KYC/AML and securities compliance
 - viewing keys are not currently stored; add encrypted custody/read-only access if that feature is needed
+
+## Future Property Data Features
+
+- Regrid live parcel API integration
+- ATTOM/ICE/Cotality enrichment provider
+- official county/state ArcGIS connector layer
+- PostGIS parcel boundary storage
+- flood/elevation/climate risk enrichment
+- zoning/land-use module
+- MLS/RESO listing overlay
+- provider confidence scoring dashboard
+- provider license/compliance registry
+- background enrichment jobs
+- map-based parcel confirmation

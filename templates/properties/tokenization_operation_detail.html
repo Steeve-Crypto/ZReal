@@ -34,14 +34,14 @@
                 </div>
 
                 <dl class="grid gap-4 mt-6 text-sm md:grid-cols-2">
-                    <div><dt class="text-white/40">Method / Backend</dt><dd class="font-mono">{{ operation.backend }}</dd></div>
+                    <div><dt class="text-white/40">Issuance Method</dt><dd>Configured issuer tooling</dd></div>
                     <div><dt class="text-white/40">Asset Symbol</dt><dd class="font-mono">{{ operation.asset_symbol }}</dd></div>
                     <div><dt class="text-white/40">Total Shares</dt><dd>{{ operation.total_shares }}</dd></div>
                     <div><dt class="text-white/40">Issuer z-address</dt><dd class="font-mono">{{ issuer_zaddr_masked }}</dd></div>
                     <div><dt class="text-white/40">Operation ID</dt><dd class="font-mono break-all">{{ operation.operation_id|default:"No data yet" }}</dd></div>
                     <div><dt class="text-white/40">Transaction ID</dt><dd class="font-mono break-all">{{ operation.txid|default:"No data yet" }}</dd></div>
                     <div><dt class="text-white/40">Asset ID</dt><dd class="font-mono break-all">{{ operation.asset_id|default:"No data yet" }}</dd></div>
-                    <div><dt class="text-white/40">Error</dt><dd class="text-red-200">{{ operation.error|default:"No error recorded" }}</dd></div>
+                    <div><dt class="text-white/40">Error</dt><dd class="text-red-200">{{ operation_error|default:"No error recorded" }}</dd></div>
                 </dl>
 
                 {% if can_refresh %}
@@ -61,7 +61,7 @@
 
             {% if request.user.is_staff %}
                 <div class="glass rounded-3xl border border-white/10 p-6">
-                    <h2 class="text-2xl font-semibold mb-4">Raw Backend Response</h2>
+                    <h2 class="text-2xl font-semibold mb-4">Staff Response Details</h2>
                     <pre class="overflow-auto rounded-2xl bg-black/30 p-4 text-xs text-white/80">{{ response_pretty }}</pre>
                 </div>
             {% endif %}

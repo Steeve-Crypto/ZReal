@@ -16,6 +16,7 @@ from .lifecycle import (
     PUBLIC_PROPERTY_STATUSES,
     active_subscription_required,
     can_attempt_tokenization,
+    can_enrich_property,
     can_edit_property,
     can_upload_documents,
     evaluate_property_readiness,
@@ -23,7 +24,17 @@ from .lifecycle import (
     sync_pre_tokenization_lifecycle,
     sync_property_from_operation,
 )
-from .models import Property, PropertyDocument, TokenizationOperation
+from .enrichment import (
+    ProviderDisabled,
+    ProviderMissingConfiguration,
+    ProviderUnsupported,
+    PropertyDataProviderError,
+    enrichment_to_payload,
+    resolve_property_address,
+    status_for_result,
+    store_enrichment_result,
+)
+from .models import Property, PropertyDocument, PropertyEnrichment, TokenizationOperation
 from .serializers import document_payload, property_payload, tokenization_operation_payload
 from .views import (
     _hash_uploaded_file,
@@ -90,7 +101,8 @@ def create_property(request):
 def edit_property(request, pk):
     prop = _issuer_property_or_404(request.user, pk)
     if not can_edit_property(prop):
-        return Response({"error": "Archived properties cannot be edited.", "code": "property_archived"}, status=409)
+        code = "property_archived" if prop.status == "archived" else "invalid_lifecycle_state"
+        return Response({"error": "Property cannot be edited in its current lifecycle state.", "code": code}, status=409)
     form = PropertyForm(request.data, instance=prop)
     if not form.is_valid():
         return Response({"errors": form.errors}, status=400)
@@ -100,6 +112,131 @@ def edit_property(request, pk):
     if transition:
         notifications.append(push_notification(request, "success", transition.message))
     return Response({"property": property_payload(prop, request.user), "notifications": notifications})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def resolve_address(request):
+    _require_issuer(request.user)
+    address = (request.data.get("address") or "").strip()
+    if not address:
+        return Response({"error": "Address is required."}, status=400)
+    try:
+        result = resolve_property_address(address)
+    except ProviderUnsupported as exc:
+        return Response({"status": "failed", "warnings": ["Address provider is not supported."], "code": exc.code}, status=200)
+    except ProviderMissingConfiguration as exc:
+        return Response({"status": "failed", "warnings": ["Address provider is not configured."], "code": exc.code}, status=200)
+    except ProviderDisabled as exc:
+        return Response({"status": "failed", "warnings": ["Address provider is not enabled."], "code": exc.code}, status=200)
+    except PropertyDataProviderError as exc:
+        return Response({"status": "failed", "warnings": ["Address lookup is temporarily unavailable."], "code": exc.code}, status=200)
+    return Response({
+        "status": status_for_result(result),
+        "provider": result.provider,
+        "candidates": [candidate.to_safe_dict() for candidate in result.candidates],
+        "warnings": result.warnings,
+        "blockers": result.blockers,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def enrich_property(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    if not can_enrich_property(prop):
+        return Response({"error": "Property cannot be enriched in its current lifecycle state.", "code": "invalid_lifecycle_state"}, status=409)
+    address = (request.data.get("address") or prop.address or "").strip()
+    if not address:
+        return Response({"error": "Address is required."}, status=400)
+    try:
+        result = resolve_property_address(address)
+        enrichment = store_enrichment_result(prop, result)
+    except (ProviderUnsupported, ProviderMissingConfiguration, ProviderDisabled, PropertyDataProviderError) as exc:
+        enrichment = prop.enrichment if hasattr(prop, "enrichment") else None
+        if not enrichment:
+            enrichment = PropertyEnrichment.objects.create(property=prop)
+        enrichment.status = "failed"
+        enrichment.provider = getattr(exc, "provider", "") or ""
+        if isinstance(exc, ProviderUnsupported):
+            warning = "Address provider is not supported."
+        elif isinstance(exc, ProviderMissingConfiguration):
+            warning = "Address provider is not configured."
+        elif isinstance(exc, ProviderDisabled):
+            warning = "Address provider is not enabled."
+        else:
+            warning = "Address lookup is temporarily unavailable."
+        enrichment.warnings = [warning]
+        enrichment.blockers = []
+        enrichment.retrieved_at = timezone.now()
+        enrichment.save()
+    notification = push_notification(request, "success" if enrichment.status in ["enriched", "needs_review"] else "warning", "Property data enrichment updated.")
+    return Response({
+        "property": property_payload(prop, request.user),
+        "enrichment": enrichment_to_payload(enrichment),
+        "notifications": [notification],
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def property_enrichment(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    return Response(enrichment_to_payload(getattr(prop, "enrichment", None)))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def confirm_enrichment(request, pk):
+    prop = _issuer_property_or_404(request.user, pk)
+    if not can_enrich_property(prop):
+        return Response({"error": "Property cannot be changed in its current lifecycle state.", "code": "invalid_lifecycle_state"}, status=409)
+    enrichment = getattr(prop, "enrichment", None)
+    if not enrichment or enrichment.status == "not_started":
+        return Response({"error": "No enrichment data is available to confirm."}, status=400)
+    if enrichment.status == "failed":
+        return Response({"error": "Failed enrichment cannot be confirmed until a match is resolved."}, status=409)
+
+    updates = request.data or {}
+    for field_name in [
+        "normalized_address", "address_line_1", "city", "state", "postal_code", "country",
+        "county", "jurisdiction", "parcel_id", "apn", "property_type",
+    ]:
+        if field_name in updates:
+            setattr(enrichment, field_name, (updates.get(field_name) or "").strip())
+    for field_name in ["latitude", "longitude", "lot_size", "building_area", "assessed_value", "tax_value"]:
+        if field_name in updates:
+            setattr(enrichment, field_name, updates.get(field_name) or None)
+    if "year_built" in updates:
+        enrichment.year_built = updates.get("year_built") or None
+
+    if enrichment.normalized_address:
+        prop.address = enrichment.normalized_address
+    if enrichment.latitude is not None:
+        prop.latitude = enrichment.latitude
+    if enrichment.longitude is not None:
+        prop.longitude = enrichment.longitude
+    if enrichment.building_area is not None and not prop.size_sqm:
+        prop.size_sqm = float(enrichment.building_area)
+    if enrichment.assessed_value is not None and not prop.estimated_value:
+        prop.estimated_value = enrichment.assessed_value
+    if not prop.title:
+        prop.title = enrichment.normalized_address or prop.address or "Untitled property"
+    prop.save()
+
+    enrichment.status = "enriched"
+    enrichment.confirmed_at = timezone.now()
+    enrichment.confirmed_by = request.user
+    enrichment.save()
+    transition = sync_pre_tokenization_lifecycle(prop, user=request.user)
+    notifications = [push_notification(request, "success", "Autofill reviewed and confirmed.")]
+    if transition:
+        notifications.append(push_notification(request, "success", transition.message))
+    return Response({
+        "property": property_payload(prop, request.user),
+        "enrichment": enrichment_to_payload(enrichment),
+        "notifications": notifications,
+    })
 
 
 @api_view(["GET"])
@@ -176,10 +313,13 @@ def upload_document(request, pk):
             "property": property_payload(prop, request.user),
             "notifications": notifications,
         }, status=201)
-    except Exception as exc:
+    except Exception:
         doc.processing_status = "failed"
         doc.save(update_fields=["processing_status"])
-        return Response({"error": str(exc), "document": document_payload(doc)}, status=500)
+        return Response({
+            "error": "Document processing could not be completed. Please try again or contact support.",
+            "document": document_payload(doc),
+        }, status=500)
 
 
 @api_view(["GET"])
@@ -226,7 +366,7 @@ def issue_property_tokenization(request, pk):
             metadata=metadata,
         )
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
-        notification = push_notification(request, "error", "ZSA backend configuration is invalid.")
+        notification = push_notification(request, "error", "Tokenization setup is incomplete.")
         return Response({
             "error": client.safe_error_message(exc),
             "code": "invalid_zsa_configuration",

@@ -2,7 +2,7 @@
 
 Status: runnable local product foundation.
 
-ZReal now provides real application flows for authentication, role selection, issuer property management, document upload/processing, database-backed dashboards, and auditable tokenization attempts.
+ZReal now provides application flows for authentication, role selection, issuer property management, address-first property data enrichment, document upload/processing, dashboard metrics from persisted records, and auditable tokenization attempts.
 
 The app does not yet prove a live native ZSA issuance by itself. It integrates with a configured external ZSA-capable command and records only the real identifiers returned by that command.
 
@@ -18,13 +18,14 @@ The core Django app is now coherent and testable. The remaining score gap is mos
 - Django auth via allauth
 - role selection
 - issuer property create/edit
+- address-first property data autofill in fixture mode with issuer confirmation
 - ownership-protected document upload
 - deterministic document extraction path
 - property map
-- issuer and investor dashboards using real database values
+- issuer and investor dashboards using persisted application records
 - tokenization audit records
 - safe document metadata attached to tokenization attempts
-- strict no-fake-ZSA behavior
+- tokenization records limited to configured tooling responses
 - expanded tests covering permissions, config failures, status refresh, investor holdings, and Stripe missing config
 - tests for document upload and tokenization update behavior
 
@@ -35,3 +36,4 @@ The core Django app is now coherent and testable. The remaining score gap is mos
 - KYC/AML workflow
 - native in-process ZSA minting
 - confirmed testnet ZSA issuance without external user configuration
+- licensed live property/parcel data provider integration

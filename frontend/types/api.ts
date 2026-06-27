@@ -47,6 +47,39 @@ export type PropertyReadiness = {
   next_action: string;
 };
 
+export type PropertyEnrichment = {
+  id?: number;
+  status: "not_started" | "pending" | "enriched" | "needs_review" | "failed";
+  is_confirmed: boolean;
+  provider: string | null;
+  data_source?: string | null;
+  source_record_id?: string | null;
+  normalized_address: string | null;
+  address_line_1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  county?: string | null;
+  jurisdiction?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  parcel_id?: string | null;
+  apn?: string | null;
+  lot_size?: string | null;
+  building_area?: string | null;
+  year_built?: number | null;
+  property_type?: string | null;
+  assessed_value?: string | null;
+  tax_value?: string | null;
+  match_confidence?: string | null;
+  warnings: string[];
+  blockers: string[];
+  candidates: Array<Record<string, unknown>>;
+  retrieved_at?: string | null;
+  confirmed_at?: string | null;
+};
+
 export type TokenizationSummary = {
   status: string;
   status_display: string;
@@ -64,7 +97,7 @@ export type PropertyRecord = {
   address: string;
   latitude: string | null;
   longitude: string | null;
-  size_sqm: number;
+  size_sqm: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
   estimated_value: string | null;
@@ -77,6 +110,7 @@ export type PropertyRecord = {
     next_action: string;
   };
   readiness: PropertyReadiness;
+  enrichment: PropertyEnrichment;
   tokenization: TokenizationSummary;
   latest_tokenization_operation: TokenizationOperation | null;
   document_count: number;

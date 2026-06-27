@@ -20,10 +20,10 @@
                     {% block auth_hero_title %}Secure access for private real estate workflows.{% endblock %}
                 </h1>
                 <p class="mt-5 max-w-xl text-base leading-7 text-slate-300">
-                    {% block auth_hero_text %}Sign in to manage issuer properties, legal documents, and real Zcash-backed tokenization operations through ZReal.{% endblock %}
+                    {% block auth_hero_text %}Sign in to manage issuer properties, legal documents, and ZSA tokenization operations through ZReal.{% endblock %}
                 </p>
                 <div class="mt-8 grid max-w-xl gap-3 text-sm text-slate-300">
-                    <div class="glass rounded-2xl px-4 py-3"><i class="fa-solid fa-lock mr-2 text-[#d4af37]"></i>Django session authentication, CSRF protected.</div>
+                    <div class="glass rounded-2xl px-4 py-3"><i class="fa-solid fa-lock mr-2 text-[#d4af37]"></i>Secure account access with protected form submissions.</div>
                     <div class="glass rounded-2xl px-4 py-3"><i class="fa-solid fa-file-shield mr-2 text-[#d4af37]"></i>Document workflows stay tied to authenticated issuer ownership.</div>
                 </div>
             </section>
@@ -36,7 +36,7 @@
                         </span>
                         <span class="font-semibold">ZReal</span>
                     </a>
-                    <a href="{{ FRONTEND_ORIGIN }}/" class="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-200">Frontend</a>
+                    <a href="{{ FRONTEND_ORIGIN }}/" class="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-200">Home</a>
                 </div>
                 <div class="auth-card glass rounded-3xl p-6 shadow-2xl sm:p-8">
                     <div class="mb-8">
@@ -47,7 +47,7 @@
                     {% block auth_content %}{% endblock %}
                 </div>
                 <div class="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-400">
-                    <a class="auth-link text-[#d4af37] hover:text-[#f2d779]" href="{{ FRONTEND_ORIGIN }}/">Return to product frontend</a>
+                    <a class="auth-link text-[#d4af37] hover:text-[#f2d779]" href="{{ FRONTEND_ORIGIN }}/">Return to ZReal</a>
                     <span class="text-white/20">/</span>
                     <a class="auth-link text-slate-300 hover:text-white" href="{% url 'account_login' %}">Sign in</a>
                     <span class="text-white/20">/</span>

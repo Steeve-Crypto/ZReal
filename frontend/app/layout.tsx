@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ZReal",
-  description: "Private real estate tokenization product UI backed by Django and Zcash."
+  description: "Private real estate tokenization workspace for issuers and investors."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

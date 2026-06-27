@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Property, PropertyInvestment, PropertyDocument, TokenizationOperation
+from .models import Property, PropertyEnrichment, PropertyInvestment, PropertyDocument, TokenizationOperation
 
 
 @admin.register(Property)
@@ -19,6 +19,14 @@ class PropertyInvestmentAdmin(admin.ModelAdmin):
 class PropertyDocumentAdmin(admin.ModelAdmin):
     list_display = ('property', 'document_type', 'processing_status', 'file_sha256', 'uploaded_at')
     list_filter = ('processing_status', 'document_type')
+
+
+@admin.register(PropertyEnrichment)
+class PropertyEnrichmentAdmin(admin.ModelAdmin):
+    list_display = ('property', 'status', 'provider', 'match_confidence', 'confirmed_at', 'retrieved_at')
+    list_filter = ('status', 'provider')
+    search_fields = ('property__title', 'normalized_address', 'parcel_id', 'apn')
+    readonly_fields = ('safe_payload', 'candidates', 'warnings', 'blockers', 'created_at', 'updated_at')
 
 
 @admin.register(TokenizationOperation)

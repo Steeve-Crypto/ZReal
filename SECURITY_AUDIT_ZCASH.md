@@ -1,6 +1,6 @@
 # Zcash Security Notes
 
-ZReal does not store spending keys and does not generate fake tokenization IDs.
+ZReal does not store spending keys and does not generate simulated tokenization IDs.
 
 ## Current Protections
 

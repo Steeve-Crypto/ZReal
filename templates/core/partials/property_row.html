@@ -47,8 +47,8 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-white/40">Method</div>
-                    <div>{{ op.backend|default:zsa_backend }}</div>
+                    <div class="text-white/40">Issuance Method</div>
+                    <div>{% if op or zsa_config.ready %}Configured issuer tooling{% else %}No data yet{% endif %}</div>
                 </div>
                 <div>
                     <div class="text-white/40">Asset Symbol</div>
@@ -102,7 +102,7 @@
                 {% if prop.tokenization_status == 'pending' or prop.tokenization_status == 'broadcast' %}
                     <form method="post" action="{% url 'refresh_zsa_status' prop.pk %}" class="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
                         {% csrf_token %}
-                        <span class="text-xs text-amber-300">Next action: refresh backend status</span>
+                        <span class="text-xs text-amber-300">Next action: refresh tokenization status</span>
                         <button type="submit" class="px-4 py-2 text-sm rounded-3xl border border-white/20 hover:bg-white/10">
                             Refresh Status
                         </button>
@@ -111,7 +111,7 @@
                     <p class="text-xs text-emerald-300 md:text-right">Next action: property can be made available to investors when legal/compliance checks are complete.</p>
                 {% elif not zsa_config.ready %}
                     <div class="text-xs text-amber-300 md:text-right">
-                        <p>ZSA configuration is not ready. Resolve the missing backend values before issuing.</p>
+                        <p>Tokenization setup is incomplete. Resolve the missing values before issuing.</p>
                         {% if zsa_config.missing %}
                             <p class="mt-1 text-white/50">{{ zsa_config.missing|join:", " }}</p>
                         {% endif %}

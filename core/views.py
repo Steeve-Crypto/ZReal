@@ -222,7 +222,7 @@ def create_checkout_session(request):
         return JsonResponse({"error": "Only issuers can subscribe"}, status=403)
     if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_ISSUER_PRICE_ID:
         return JsonResponse({
-            "error": "Stripe is not configured. Set STRIPE_SECRET_KEY and STRIPE_ISSUER_PRICE_ID."
+            "error": "Billing is not configured. Contact an administrator."
         }, status=400)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY

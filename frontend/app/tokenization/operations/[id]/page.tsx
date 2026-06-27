@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { ProductNav } from "@/components/nav";
 import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
-import { ApiError, apiGet, apiJson } from "@/lib/api";
+import { apiGet, apiJson, userFacingError } from "@/lib/api";
 import type { TokenizationMutationResponse, TokenizationOperation } from "@/types/api";
 
 export default function TokenizationOperationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,8 +32,7 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
       setOperation(response.operation);
       setActionMessage(response.notifications.map((item) => item.message).join(" "));
     } catch (err) {
-      if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
-      else setActionError(err instanceof Error ? err.message : "Could not refresh tokenization status.");
+      setActionError(userFacingError(err, "Could not refresh tokenization status."));
       await loadOperation().catch(() => undefined);
     } finally {
       setRefreshing(false);
@@ -64,10 +63,10 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
           {actionMessage ? <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{actionMessage}</div> : null}
           <Card>
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
-              <div><dt className="text-white/40">Backend</dt><dd>{operation.backend}</dd></div>
+              <div><dt className="text-white/40">Issuance method</dt><dd>{operation.backend ? "Configured issuer tooling" : "No data yet"}</dd></div>
               <div><dt className="text-white/40">Issuer address</dt><dd>{operation.issuer_zaddr_masked ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">Operation ID</dt><dd className="break-all">{operation.operation_id ?? "No data yet"}</dd></div>
-              <div><dt className="text-white/40">Txid</dt><dd className="break-all">{operation.txid ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Transaction ID</dt><dd className="break-all">{operation.txid ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{operation.asset_id ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">Error</dt><dd>{operation.error ?? "No error recorded"}</dd></div>
               <div><dt className="text-white/40">Created</dt><dd>{operation.created_at ?? "No data yet"}</dd></div>
@@ -83,7 +82,7 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
           </Card>
           {operation.can_view_raw_response ? (
             <Card>
-              <h2 className="text-xl font-semibold text-white">Raw backend response</h2>
+              <h2 className="text-xl font-semibold text-white">Staff response details</h2>
               <pre className="mt-4 overflow-auto rounded-xl bg-black/25 p-4 text-xs text-white/65">{JSON.stringify(operation.raw_response ?? {}, null, 2)}</pre>
             </Card>
           ) : null}

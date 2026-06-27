@@ -20,6 +20,9 @@ Staging requires the same configuration as local development plus a real databas
 - `STRIPE_SECRET_KEY`
 - `STRIPE_ISSUER_PRICE_ID`
 - `DJSTRIPE_WEBHOOK_SECRET`
+- `PROPERTY_DATA_PROVIDER`
+- `PROPERTY_DATA_ENABLE_LIVE_CALLS`
+- provider-specific property data API keys if live enrichment is enabled: `REGRID_API_KEY`, `OPENCAGE_API_KEY`, `GOOGLE_GEOCODING_API_KEY`, or the `PROPERTY_DATA_*` aliases
 
 ## Deploy
 

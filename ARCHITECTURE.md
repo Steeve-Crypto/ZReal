@@ -12,6 +12,7 @@
 
 - `core.UserProfile`: role, subscription status, optional viewing key field.
 - `properties.Property`: issuer-owned property record, map coordinates, estimated value, tokenization state.
+- `properties.PropertyEnrichment`: reviewable address/provider enrichment data and provenance kept separate until issuer confirmation.
 - `properties.PropertyDocument`: uploaded document plus extracted text/data.
 - `properties.PropertyInvestment`: investor share positions.
 - `properties.TokenizationOperation`: auditable record of each ZSA issuance attempt.
@@ -22,13 +23,18 @@
 2. `/profile/role/` lets users choose investor or issuer.
 3. `/issuer/dashboard/` shows issuer-owned properties and real database metrics.
 4. `/properties/new/` and `/properties/<id>/edit/` manage issuer-owned property data.
-5. `/properties/<id>/upload-document/` accepts documents only from the owning issuer.
-6. `/properties/<id>/issue-zsa/` creates a `TokenizationOperation` and calls the configured ZSA backend.
-7. `/properties/<id>/refresh-zsa-status/` refreshes pending operation state.
+5. `/api/properties/resolve-address/`, `/api/properties/<id>/enrich/`, and `/api/properties/<id>/confirm-enrichment/` support address-first autofill with issuer review before data is trusted.
+6. `/properties/<id>/upload-document/` accepts documents only from the owning issuer.
+7. `/properties/<id>/issue-zsa/` creates a `TokenizationOperation` and calls the configured ZSA backend.
+8. `/properties/<id>/refresh-zsa-status/` refreshes pending operation state.
+
+## Property Data Boundary
+
+Property enrichment is provider-agnostic. Local and CI usage defaults to `PROPERTY_DATA_PROVIDER=mock` with live calls disabled. Live providers must be explicitly enabled and configured, and raw provider payloads are not exposed to issuers.
 
 ## ZSA Boundary
 
-ZReal does not create fake txids or fake asset IDs. The external ZSA command must return JSON containing real identifiers. If configuration is missing or the tool fails, ZReal records the failed operation and shows the issuer a clear error.
+ZReal does not create simulated txids or simulated asset IDs. The external ZSA command must return JSON containing identifiers from the configured tool. If configuration is missing or the tool fails, ZReal records the failed operation and shows the issuer a clear error.
 
 Tokenization metadata is generated from safe fields only: property identifier, asset symbol, share count, uploaded document types, document SHA-256 hashes, timestamps, and selected structured extraction fields. Full legal text is not passed to tokenization metadata.
 
@@ -38,3 +44,4 @@ Tokenization metadata is generated from safe fields only: property identifier, a
 - investor purchase checkout
 - dividend/rental distribution execution
 - KYC/AML workflow
+- live parcel/geocoder enrichment providers beyond mock/Census geocoding

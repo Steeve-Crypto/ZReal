@@ -26,11 +26,11 @@ export default function IssuerDashboardPage() {
       <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-4xl font-semibold text-white">Issuer Dashboard</h1>
-          <p className="mt-2 text-white/55">Database-backed property, document, and tokenization state.</p>
+          <p className="mt-2 text-white/55">Track property drafts, document readiness, and tokenization operations.</p>
         </div>
-        <a className="nav-pill" href={djangoLoginUrl("/issuer/dashboard/")}>Django login</a>
+        <a className="nav-pill" href={djangoLoginUrl("/issuer/dashboard/")}>Sign in</a>
       </header>
-      {error ? <EmptyState title={error} detail="Choose the issuer role in Django after signing in." /> : null}
+      {error ? <EmptyState title={error} detail="Sign in and choose issuer access from your account settings." /> : null}
       {data ? (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-4">
@@ -42,11 +42,11 @@ export default function IssuerDashboardPage() {
           <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-white">ZSA backend</h2>
-                <p className="mt-1 text-sm text-white/55">{data.zsa_config.backend || "No backend configured"}</p>
+                <h2 className="text-xl font-semibold text-white">Tokenization Setup</h2>
+                <p className="mt-1 text-sm text-white/55">{data.zsa_config.ready ? "Issuance configuration is complete." : "Configuration incomplete"}</p>
               </div>
               <StatusBadge tone={data.zsa_config.ready ? "good" : "bad"}>
-                {data.zsa_config.ready ? "Ready" : "ZSA backend is not configured."}
+                {data.zsa_config.ready ? "Ready" : "Setup required"}
               </StatusBadge>
             </div>
             {!data.zsa_config.ready && data.zsa_config.missing.length ? (
@@ -78,7 +78,7 @@ export default function IssuerDashboardPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No properties yet." detail="Create a property in Django or through the API to begin the issuer workflow." />
+            <EmptyState title="No properties yet." detail="Create your first property draft to begin the issuer workflow." />
           )}
         </div>
       ) : null}

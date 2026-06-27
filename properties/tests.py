@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 
-from properties.models import Property, PropertyDocument, PropertyInvestment, TokenizationOperation
+from properties.models import Property, PropertyDocument, PropertyEnrichment, PropertyInvestment, TokenizationOperation
 from zcash_integration.zcash_client import ZcashClient, ZcashConfigurationError, ZcashToolOutputError
 
 
@@ -304,7 +304,7 @@ class ZsaConfigurationEndpointTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ZSA Configuration")
-        self.assertContains(response, "Not Ready")
+        self.assertContains(response, "Setup Required")
         self.assertContains(response, "ZCASH_RPC_URL")
 
 
@@ -367,7 +367,8 @@ class TokenizationOperationDetailTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "op-123")
         self.assertContains(response, "ztestsap...456789")
-        self.assertContains(response, "Backend not configured")
+        self.assertContains(response, "Tokenization setup is incomplete.")
+        self.assertNotContains(response, "Backend not configured")
         self.assertNotContains(response, "private_debug")
 
     def test_other_issuer_cannot_view_operation_detail(self):
@@ -400,7 +401,7 @@ class InvestorPortfolioTest(TestCase):
         response = client.get("/investor/portfolio/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No investments yet.")
+        self.assertContains(response, "No holdings yet.")
         self.assertNotContains(response, "$2.84M")
 
     def test_investor_dashboard_uses_real_holdings(self):
@@ -507,7 +508,7 @@ class BillingConfigTest(TestCase):
         response = client.post("/billing/create-checkout-session/")
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Stripe is not configured", response.json()["error"])
+        self.assertIn("Billing is not configured", response.json()["error"])
 
 
 class ProductApiTest(TestCase):
@@ -543,6 +544,177 @@ class ProductApiTest(TestCase):
         self.assertEqual(response.json()["property"]["title"], "API Created Property")
         self.assertEqual(response.json()["notifications"][0]["message"], "Property draft created.")
         self.assertTrue(Property.objects.filter(owner=issuer, title="API Created Property").exists())
+
+    def test_property_can_be_created_with_address_only(self):
+        issuer = make_user("api_address_only_issuer", "issuer")
+        client = Client()
+        client.login(username="api_address_only_issuer", password="pass")
+
+        response = client.post(
+            "/api/properties/new/",
+            data={"address": "100 Address First Way"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        prop = Property.objects.get(owner=issuer)
+        self.assertEqual(prop.address, "100 Address First Way")
+        self.assertEqual(prop.title, "100 Address First Way")
+        self.assertIsNone(prop.size_sqm)
+        self.assertEqual(prop.total_shares, 10000)
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_address_resolution_populates_enrichment_from_mock_provider(self):
+        issuer = make_user("api_enrich_issuer", "issuer")
+        prop = make_property(issuer, address="1600 Pennsylvania Ave")
+        client = Client()
+        client.login(username="api_enrich_issuer", password="pass")
+
+        response = client.post(
+            f"/api/properties/{prop.pk}/enrich/",
+            data={"address": prop.address},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["enrichment"]["status"], "enriched")
+        self.assertEqual(data["enrichment"]["provider"], "mock")
+        self.assertEqual(data["enrichment"]["latitude"], "38.897700")
+        self.assertEqual(data["property"]["enrichment"]["normalized_address"], "1600 Pennsylvania Ave")
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_ambiguous_address_resolution_requires_review(self):
+        make_user("api_ambiguous_resolve_issuer", "issuer")
+        client = Client()
+        client.login(username="api_ambiguous_resolve_issuer", password="pass")
+
+        response = client.post(
+            "/api/properties/resolve-address/",
+            data={"address": "ambiguous fixture address"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "needs_review")
+        self.assertGreater(len(data["candidates"]), 1)
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_low_confidence_match_needs_review_and_blocks_readiness(self):
+        issuer = make_user("api_low_conf_issuer", "issuer")
+        prop = make_property(issuer, address="ambiguous fixture address")
+        make_completed_document(prop)
+        client = Client()
+        client.login(username="api_low_conf_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["enrichment"]["status"], "needs_review")
+        readiness = client.get(f"/api/properties/{prop.pk}/readiness/").json()
+        self.assertFalse(readiness["ready_for_tokenization"])
+        self.assertIn("Autofilled property data must be reviewed and confirmed before tokenization.", readiness["blocking_issues"])
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    @patch("properties.api.ZcashClient")
+    def test_confirming_enrichment_updates_readiness_evidence(self, mock_client_class):
+        issuer = make_user("api_confirm_enrich_issuer", "issuer")
+        prop = make_property(issuer, address="ambiguous fixture address")
+        make_completed_document(prop)
+        mock_client = MagicMock()
+        mock_client.configuration_report.return_value = {
+            "ready": True,
+            "configured": True,
+            "missing": [],
+            "warnings": [],
+            "backend": "zcash_tx_tool",
+            "method": "zcash_tx_tool",
+            "safe_display": {},
+        }
+        mock_client_class.return_value = mock_client
+        client = Client()
+        client.login(username="api_confirm_enrich_issuer", password="pass")
+        client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        response = client.post(f"/api/properties/{prop.pk}/confirm-enrichment/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        prop.refresh_from_db()
+        self.assertEqual(prop.enrichment.status, "enriched")
+        self.assertIsNotNone(prop.enrichment.confirmed_at)
+        readiness = response.json()["property"]["readiness"]
+        self.assertTrue(next(check for check in readiness["checks"] if check["key"] == "property_data_reviewed")["ok"])
+
+    @override_settings(PROPERTY_DATA_PROVIDER="regrid", PROPERTY_DATA_REGRID_API_KEY="", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_missing_provider_key_returns_warning_not_crash(self):
+        issuer = make_user("api_missing_key_issuer", "issuer")
+        prop = make_property(issuer)
+        client = Client()
+        client.login(username="api_missing_key_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["enrichment"]["status"], "failed")
+        self.assertEqual(response.json()["enrichment"]["warnings"][0], "Address provider is not configured.")
+
+    @override_settings(PROPERTY_DATA_PROVIDER="unknown_provider", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_unsupported_provider_returns_clean_warning_not_crash(self):
+        issuer = make_user("api_unsupported_provider_issuer", "issuer")
+        prop = make_property(issuer)
+        client = Client()
+        client.login(username="api_unsupported_provider_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["enrichment"]["status"], "failed")
+        self.assertEqual(response.json()["enrichment"]["warnings"][0], "Address provider is not supported.")
+
+    @override_settings(PROPERTY_DATA_PROVIDER="census", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    @patch("properties.enrichment.urlopen")
+    def test_ci_does_not_make_live_external_property_data_calls(self, mock_urlopen):
+        issuer = make_user("api_no_live_issuer", "issuer")
+        prop = make_property(issuer)
+        client = Client()
+        client.login(username="api_no_live_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["enrichment"]["status"], "failed")
+        mock_urlopen.assert_not_called()
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_archived_property_cannot_be_enriched(self):
+        issuer = make_user("api_archived_enrich_issuer", "issuer")
+        prop = make_property(issuer, status="archived")
+        client = Client()
+        client.login(username="api_archived_enrich_issuer", password="pass")
+
+        response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "invalid_lifecycle_state")
+        self.assertFalse(PropertyEnrichment.objects.filter(property=prop).exists())
+
+    @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
+    def test_tokenized_active_and_pending_properties_cannot_be_enriched_or_edited(self):
+        issuer = make_user("api_locked_enrich_issuer", "issuer")
+        client = Client()
+        client.login(username="api_locked_enrich_issuer", password="pass")
+
+        for status in ["tokenization_pending", "tokenized", "active"]:
+            prop = make_property(issuer, title=f"Locked {status}", status=status)
+            enrich_response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
+            edit_response = client.patch(
+                f"/api/properties/{prop.pk}/edit/",
+                data={"title": "Changed", "address": prop.address},
+                content_type="application/json",
+            )
+            self.assertEqual(enrich_response.status_code, 409)
+            self.assertEqual(edit_response.status_code, 409)
 
     def test_property_edit_api_requires_owner(self):
         issuer = make_user("api_edit_issuer", "issuer")
@@ -631,6 +803,29 @@ class ProductApiTest(TestCase):
         prop.refresh_from_db()
         self.assertIn(prop.status, {"documents_uploaded", "ready_for_review"})
 
+    @patch("properties.api.pdfplumber")
+    def test_document_upload_api_failure_returns_safe_message(self, mock_pdfplumber):
+        media_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(media_dir.cleanup)
+        issuer = make_user("api_upload_failure_issuer", "issuer")
+        prop = make_property(issuer)
+        mock_pdfplumber.open.side_effect = RuntimeError("parser exploded with token super-secret")
+        client = Client()
+        client.login(username="api_upload_failure_issuer", password="pass")
+
+        with override_settings(MEDIA_ROOT=media_dir.name):
+            uploaded = SimpleUploadedFile("property_upload.pdf", b"%PDF-1.4 api", content_type="application/pdf")
+            response = client.post(
+                f"/api/properties/{prop.pk}/documents/upload/",
+                {"document": uploaded, "document_type": "Title"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertEqual(data["error"], "Document processing could not be completed. Please try again or contact support.")
+        self.assertNotIn("super-secret", str(data))
+        self.assertEqual(data["document"]["processing_status"], "failed")
+
     @override_settings(ZCASH_TX_TOOL_PATH="", ZCASH_RPC_URL="")
     @patch("zcash_integration.zcash_client.shutil.which", return_value=None)
     def test_property_readiness_api_reports_blockers(self, _which):
@@ -645,7 +840,7 @@ class ProductApiTest(TestCase):
         data = response.json()
         self.assertFalse(data["ready_for_tokenization"])
         self.assertIn("blocking_issues", data)
-        self.assertIn("Configure the real Zcash/ZSA backend before issuance.", data["blocking_issues"])
+        self.assertIn("Tokenization setup is incomplete. Contact an administrator or complete setup before issuance.", data["blocking_issues"])
 
     def test_archived_property_cannot_be_edited(self):
         issuer = make_user("api_archived_issuer", "issuer")
