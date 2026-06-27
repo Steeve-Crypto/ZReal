@@ -1,0 +1,38 @@
+{% extends "account/base_auth.html" %}
+
+{% block title %}Sign Up | ZReal{% endblock %}
+{% block auth_title %}Create your account{% endblock %}
+{% block auth_subtitle %}<p class="mt-2 text-sm text-slate-400">Start with an authenticated ZReal session, then choose issuer or investor access.</p>{% endblock %}
+
+{% block auth_content %}
+{% include "account/snippets/form_errors.html" %}
+<form class="space-y-5" method="post" action="{% url 'account_signup' %}">
+    {% csrf_token %}
+    {% if redirect_field_value %}
+        <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+    {% endif %}
+    {% for field in form %}
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-300">{{ field.label }}</span>
+            <input
+                class="auth-input w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-[#d4af37]"
+                type="{{ field.field.widget.input_type|default:'text' }}"
+                name="{{ field.html_name }}"
+                id="{{ field.id_for_label }}"
+                value="{{ field.value|default_if_none:'' }}"
+                autocomplete="{{ field.field.widget.attrs.autocomplete|default:'' }}"
+                {% if field.field.required %}required{% endif %}
+            >
+            {% if field.help_text %}<span class="mt-2 block text-xs text-slate-500">{{ field.help_text }}</span>{% endif %}
+            {% if field.errors %}<span class="mt-2 block text-sm text-red-200">{{ field.errors }}</span>{% endif %}
+        </label>
+    {% endfor %}
+    <button class="elegant-btn w-full rounded-2xl bg-[#d4af37] px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-black/20" type="submit">
+        Create account
+    </button>
+</form>
+<p class="mt-6 text-sm text-slate-400">
+    Already have an account?
+    <a class="text-[#d4af37] hover:text-[#f2d779]" href="{% url 'account_login' %}{% if redirect_field_value %}?{{ redirect_field_name }}={{ redirect_field_value|urlencode }}{% endif %}">Sign in</a>
+</p>
+{% endblock %}

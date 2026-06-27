@@ -1,0 +1,45 @@
+{% extends "account/base_auth.html" %}
+
+{% block title %}Sign In | ZReal{% endblock %}
+{% block auth_title %}Sign in{% endblock %}
+{% block auth_subtitle %}<p class="mt-2 text-sm text-slate-400">Use your ZReal account to continue into the product.</p>{% endblock %}
+
+{% block auth_content %}
+{% include "account/snippets/form_errors.html" %}
+<form class="space-y-5" method="post" action="{% url 'account_login' %}">
+    {% csrf_token %}
+    {% if redirect_field_value %}
+        <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+    {% endif %}
+    {% for field in form %}
+        {% if field.name != "remember" %}
+            <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">{{ field.label }}</span>
+                <input
+                    class="auth-input w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-[#d4af37]"
+                    type="{{ field.field.widget.input_type|default:'text' }}"
+                    name="{{ field.html_name }}"
+                    id="{{ field.id_for_label }}"
+                    value="{{ field.value|default_if_none:'' }}"
+                    autocomplete="{{ field.field.widget.attrs.autocomplete|default:'' }}"
+                    {% if field.field.required %}required{% endif %}
+                >
+                {% if field.errors %}<span class="mt-2 block text-sm text-red-200">{{ field.errors }}</span>{% endif %}
+            </label>
+        {% endif %}
+    {% endfor %}
+    {% if form.remember %}
+        <label class="flex items-center gap-3 text-sm text-slate-300">
+            {{ form.remember }}
+            <span>Remember this session</span>
+        </label>
+    {% endif %}
+    <button class="elegant-btn w-full rounded-2xl bg-[#d4af37] px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-black/20" type="submit">
+        Sign in
+    </button>
+</form>
+<div class="mt-6 flex flex-col gap-2 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+    <a class="text-[#d4af37] hover:text-[#f2d779]" href="{% url 'account_reset_password' %}">Forgot password?</a>
+    <span>Need access? <a class="text-[#d4af37] hover:text-[#f2d779]" href="{% url 'account_signup' %}{% if redirect_field_value %}?{{ redirect_field_name }}={{ redirect_field_value|urlencode }}{% endif %}">Create an account</a></span>
+</div>
+{% endblock %}

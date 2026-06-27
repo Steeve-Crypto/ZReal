@@ -1,0 +1,14 @@
+{% extends "account/base_auth.html" %}
+
+{% block title %}Verify Email | ZReal{% endblock %}
+{% block auth_title %}Verify your email{% endblock %}
+{% block auth_subtitle %}<p class="mt-2 text-sm text-slate-400">We sent a verification email for your ZReal account.</p>{% endblock %}
+
+{% block auth_content %}
+<div class="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-sm text-amber-100">
+    Open the verification link from your email to complete account verification.
+</div>
+<a class="mt-6 block w-full rounded-2xl bg-[#d4af37] px-5 py-3 text-center font-semibold text-slate-950" href="{{ FRONTEND_ORIGIN }}/account">
+    Return to account
+</a>
+{% endblock %}
