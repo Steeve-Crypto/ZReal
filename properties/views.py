@@ -216,6 +216,17 @@ def issue_zsa(request, pk):
 
     asset_symbol = f"ZREAL-PROP-{prop.id}"
     metadata = _safe_tokenization_metadata(prop, asset_symbol)
+    try:
+        client.validate_issue_configuration(
+            issuer_zaddr=issuer_zaddr,
+            asset_symbol=asset_symbol,
+            total_shares=prop.total_shares,
+            metadata=metadata,
+        )
+    except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
+        messages.error(request, f"ZSA backend configuration is invalid: {client.safe_error_message(exc)}")
+        return redirect('issuer_dashboard')
+
     operation = TokenizationOperation.objects.create(
         property=prop,
         issuer=request.user,
@@ -241,13 +252,13 @@ def issue_zsa(request, pk):
         messages.success(request, "Tokenization request submitted to the configured ZSA backend.")
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = 'failed'
-        operation.error = str(exc)
+        operation.error = client.safe_error_message(exc)
         operation.failed_at = timezone.now()
         operation.save()
         prop.tokenization_status = 'failed'
-        prop.tokenization_error = str(exc)
+        prop.tokenization_error = client.safe_error_message(exc)
         prop.save(update_fields=['tokenization_status', 'tokenization_error', 'updated_at'])
-        messages.error(request, f"Tokenization failed: {exc}")
+        messages.error(request, f"Tokenization failed: {client.safe_error_message(exc)}")
 
     return redirect('issuer_dashboard')
 
@@ -264,20 +275,21 @@ def refresh_zsa_status(request, pk):
         messages.error(request, "This tokenization operation has no operation ID to refresh.")
         return redirect('issuer_dashboard')
 
+    client = ZcashClient()
     try:
-        result = ZcashClient().refresh_zsa_status(operation.operation_id)
+        result = client.refresh_zsa_status(operation.operation_id)
         operation.mark_from_result(result)
         _sync_property_from_operation(prop, operation)
         messages.success(request, "Tokenization status refreshed.")
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = 'failed'
-        operation.error = str(exc)
+        operation.error = client.safe_error_message(exc)
         operation.failed_at = timezone.now()
         operation.save()
         prop.tokenization_status = 'failed'
-        prop.tokenization_error = str(exc)
+        prop.tokenization_error = client.safe_error_message(exc)
         prop.save(update_fields=['tokenization_status', 'tokenization_error', 'updated_at'])
-        messages.error(request, f"Status refresh failed: {exc}")
+        messages.error(request, f"Status refresh failed: {client.safe_error_message(exc)}")
     return redirect('issuer_dashboard')
 
 
@@ -303,18 +315,19 @@ def refresh_tokenization_operation(request, pk):
         messages.error(request, "This tokenization operation has no operation ID to refresh.")
         return redirect('tokenization_operation_detail', pk=operation.pk)
 
+    client = ZcashClient()
     try:
-        result = ZcashClient().refresh_zsa_status(operation.operation_id)
+        result = client.refresh_zsa_status(operation.operation_id)
         operation.mark_from_result(result)
         _sync_property_from_operation(operation.property, operation)
         messages.success(request, "Tokenization operation status refreshed.")
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = 'failed'
-        operation.error = str(exc)
+        operation.error = client.safe_error_message(exc)
         operation.failed_at = timezone.now()
         operation.save(update_fields=['status', 'error', 'failed_at', 'updated_at'])
         _sync_property_from_operation(operation.property, operation)
-        messages.error(request, f"Status refresh failed: {exc}")
+        messages.error(request, f"Status refresh failed: {client.safe_error_message(exc)}")
 
     return redirect('tokenization_operation_detail', pk=operation.pk)
 

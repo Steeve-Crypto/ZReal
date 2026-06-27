@@ -12,6 +12,7 @@ import shlex
 import shutil
 import string
 import subprocess
+from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
@@ -28,6 +29,21 @@ class ZcashToolOutputError(RuntimeError):
 class ZcashClient:
     ALLOWED_BACKENDS = {"zcash_tx_tool"}
     ALLOWED_STATUSES = {"pending", "broadcast", "confirmed", "failed"}
+    REQUIRED_CONFIGURATION = {
+        "ZSA_ISSUANCE_BACKEND": "Must be one of the supported ZSA backend identifiers.",
+        "ZCASH_NETWORK": "Network name passed to the external ZSA tool.",
+        "ZCASH_RPC_URL": "Zcash RPC URL, or provide ZCASHRPC_USER/PASSWORD/HOST/PORT.",
+        "ZCASH_TX_TOOL_PATH": "Path to a ZSA-capable tool, or make zcash_tx_tool available on PATH.",
+        "ZCASH_ZSA_ISSUE_COMMAND": "Command template used to issue a ZSA.",
+        "ZCASH_ZSA_STATUS_COMMAND": "Command template used to refresh operation status.",
+    }
+    OPTIONAL_CONFIGURATION = {
+        "REQUIRE_ACTIVE_SUBSCRIPTION_FOR_ZSA": "Require active issuer billing before tokenization.",
+        "ZCASHRPC_USER": "RPC username alternative to embedding credentials in ZCASH_RPC_URL.",
+        "ZCASHRPC_PASSWORD": "RPC password alternative to embedding credentials in ZCASH_RPC_URL.",
+        "ZCASHRPC_HOST": "RPC host alternative to ZCASH_RPC_URL.",
+        "ZCASHRPC_PORT": "RPC port alternative to ZCASH_RPC_URL.",
+    }
     ISSUE_REQUIRED_FIELDS = {"tool", "issuer_zaddr", "asset_symbol", "total_shares"}
     STATUS_REQUIRED_FIELDS = {"tool", "operation_id"}
     TEMPLATE_FIELDS = {
@@ -105,6 +121,27 @@ class ZcashClient:
             for _, field_name, _, _ in string.Formatter().parse(template or "")
             if field_name
         }
+
+    def _safe_rpc_display(self):
+        if not self.rpc_url:
+            return ""
+        parsed = urlsplit(self.rpc_url)
+        host = parsed.hostname or ""
+        port = f":{parsed.port}" if parsed.port else ""
+        scheme = parsed.scheme or "http"
+        return f"{scheme}://{host}{port}"
+
+    def safe_error_message(self, exc):
+        message = str(exc) or exc.__class__.__name__
+        replacements = [
+            settings.ZCASH_RPC_URL,
+            getattr(settings, "ZCASHRPC_PASSWORD", ""),
+            getattr(settings, "ZCASHRPC_USER", ""),
+        ]
+        for value in replacements:
+            if value:
+                message = message.replace(value, "[redacted]")
+        return message
 
     def _validate_template_for_report(self, template, required_fields, purpose):
         missing = []
@@ -195,6 +232,15 @@ class ZcashClient:
             "ready": not missing and command_preparable,
             "missing": missing,
             "warnings": warnings,
+            "required": self.REQUIRED_CONFIGURATION,
+            "optional": self.OPTIONAL_CONFIGURATION,
+            "validation_rules": {
+                "backend": f"Supported values: {', '.join(sorted(self.ALLOWED_BACKENDS))}.",
+                "issue_command": f"Required placeholders: {', '.join(sorted(self.ISSUE_REQUIRED_FIELDS))}.",
+                "status_command": f"Required placeholders: {', '.join(sorted(self.STATUS_REQUIRED_FIELDS))}.",
+                "tool_output": "JSON object with status pending/broadcast/confirmed/failed and at least one real operation_id, txid, or asset_id. Confirmed output requires asset_id.",
+                "issuer_address": "Shape checked locally, then z_validateaddress is called when RPC is configured.",
+            },
             "method": backend,
             "backend": backend,
             "network": self.network or "",
@@ -208,7 +254,8 @@ class ZcashClient:
             "safe_display": {
                 "backend": backend,
                 "network": self.network or "",
-                "tool_path": tool or "",
+                "tool_path": os.path.basename(tool) if tool else "",
+                "rpc_endpoint": self._safe_rpc_display(),
                 "issue_placeholders": sorted(self._template_fields(settings.ZCASH_ZSA_ISSUE_COMMAND)),
                 "status_placeholders": sorted(self._template_fields(settings.ZCASH_ZSA_STATUS_COMMAND)),
             },
@@ -321,7 +368,8 @@ class ZcashClient:
         )
 
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "ZSA tool failed.")
+            detail = result.stderr.strip() or result.stdout.strip() or "ZSA tool failed."
+            raise RuntimeError(self.safe_error_message(RuntimeError(detail)))
 
         return self._parse_tool_output(result.stdout)
 

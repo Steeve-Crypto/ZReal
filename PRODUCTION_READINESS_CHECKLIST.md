@@ -12,6 +12,10 @@
 - [x] Fake txids and fake asset IDs are not generated
 - [x] Safe document metadata is attached to tokenization attempts
 - [x] Plaintext viewing-key storage has been removed
+- [x] Property lifecycle/readiness blocks unsafe tokenization
+- [x] Missing ZSA configuration blocks before tokenization operation creation
+- [x] Invalid ZSA configuration returns safe errors
+- [x] Failed external tool calls are recorded as failed operations
 
 ## Required Before Handling Real Capital
 
@@ -24,4 +28,4 @@
 - [ ] Encrypt or remove viewing-key storage
 - [ ] Configure production database, media storage, HTTPS, logging, and backups
 - [ ] Configure Stripe products/prices/webhooks if billing is enabled
-- [ ] Expand tests for authorization failures and tokenization failure states
+- [ ] Run browser/manual QA against a real configured ZSA backend

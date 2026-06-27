@@ -104,12 +104,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 ZCASH_RPC_URL = env('ZCASH_RPC_URL', default='')
 if not ZCASH_RPC_URL:
-    zcash_user = env('ZCASHRPC_USER', default='')
-    zcash_password = env('ZCASHRPC_PASSWORD', default='')
-    zcash_host = env('ZCASHRPC_HOST', default='')
-    zcash_port = env('ZCASHRPC_PORT', default='18232')
-    if zcash_user and zcash_password and zcash_host:
-        ZCASH_RPC_URL = f"http://{zcash_user}:{zcash_password}@{zcash_host}:{zcash_port}"
+    ZCASHRPC_USER = env('ZCASHRPC_USER', default='')
+    ZCASHRPC_PASSWORD = env('ZCASHRPC_PASSWORD', default='')
+    ZCASHRPC_HOST = env('ZCASHRPC_HOST', default='')
+    ZCASHRPC_PORT = env('ZCASHRPC_PORT', default='18232')
+    if ZCASHRPC_USER and ZCASHRPC_PASSWORD and ZCASHRPC_HOST:
+        ZCASH_RPC_URL = f"http://{ZCASHRPC_USER}:{ZCASHRPC_PASSWORD}@{ZCASHRPC_HOST}:{ZCASHRPC_PORT}"
+else:
+    ZCASHRPC_USER = env('ZCASHRPC_USER', default='')
+    ZCASHRPC_PASSWORD = env('ZCASHRPC_PASSWORD', default='')
+    ZCASHRPC_HOST = env('ZCASHRPC_HOST', default='')
+    ZCASHRPC_PORT = env('ZCASHRPC_PORT', default='18232')
 
 ZCASH_NETWORK = env('ZCASH_NETWORK', default='testnet')
 ZSA_ISSUANCE_BACKEND = env('ZSA_ISSUANCE_BACKEND', default='zcash_tx_tool')

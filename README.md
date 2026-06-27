@@ -23,7 +23,7 @@ The app currently supports:
 - JSON API endpoints for the product frontend
 - a separate Next.js frontend scaffold in `frontend/`
 
-ZReal does **not** fake tokenization. ZSA issuance only runs when you configure a real external ZSA-capable backend/tool. If that backend is missing, the app records a failed tokenization attempt with a clear configuration error.
+ZReal does **not** fake tokenization. ZSA issuance only runs when you configure a real external ZSA-capable backend/tool. If required configuration is missing or invalid, tokenization is blocked before operation creation. If the configured tool runs and fails, ZReal records a failed operation with a safe error message.
 
 ## Install
 

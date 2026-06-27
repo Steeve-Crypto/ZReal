@@ -69,7 +69,10 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
       setActionMessage(response.notifications.map((item) => item.message).join(" "));
       await loadProperty();
     } catch (err) {
-      if (err instanceof ApiError && err.data) setActionError(JSON.stringify(err.data));
+      if (err instanceof ApiError && err.data) {
+        const data = err.data as { error?: string; readiness?: { blocking_issues?: string[] } };
+        setActionError(data.error ?? data.readiness?.blocking_issues?.join(" ") ?? err.message);
+      }
       else setActionError(err instanceof Error ? err.message : "Tokenization request failed.");
       await loadProperty();
     }
@@ -118,6 +121,27 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{property.tokenization.asset_id ?? "No data yet"}</dd></div>
             </dl>
           </Card>
+          {property.latest_tokenization_operation ? (
+            <Card>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Latest Tokenization Operation</h2>
+                  <p className="mt-1 text-sm text-white/55">{property.latest_tokenization_operation.asset_symbol}</p>
+                </div>
+                <StatusBadge tone={property.latest_tokenization_operation.status === "confirmed" ? "good" : property.latest_tokenization_operation.status === "failed" ? "bad" : "warn"}>
+                  {property.latest_tokenization_operation.status}
+                </StatusBadge>
+              </div>
+              <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+                <div><dt className="text-white/40">Operation ID</dt><dd className="break-all">{property.latest_tokenization_operation.operation_id ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Txid</dt><dd className="break-all">{property.latest_tokenization_operation.txid ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Asset ID</dt><dd className="break-all">{property.latest_tokenization_operation.asset_id ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Created</dt><dd>{property.latest_tokenization_operation.created_at ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Last refresh</dt><dd>{property.latest_tokenization_operation.last_status_refreshed_at ?? "No data yet"}</dd></div>
+                <div><dt className="text-white/40">Error</dt><dd>{property.latest_tokenization_operation.error ?? "No error recorded"}</dd></div>
+              </dl>
+            </Card>
+          ) : null}
           <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>

@@ -218,6 +218,23 @@ def issue_property_tokenization(request, pk):
 
     asset_symbol = f"ZREAL-PROP-{prop.id}"
     metadata = _safe_tokenization_metadata(prop, asset_symbol)
+    try:
+        client.validate_issue_configuration(
+            issuer_zaddr=issuer_zaddr,
+            asset_symbol=asset_symbol,
+            total_shares=prop.total_shares,
+            metadata=metadata,
+        )
+    except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
+        notification = push_notification(request, "error", "ZSA backend configuration is invalid.")
+        return Response({
+            "error": client.safe_error_message(exc),
+            "code": "invalid_zsa_configuration",
+            "property": property_payload(prop, request.user),
+            "operation": None,
+            "notifications": [notification],
+        }, status=409)
+
     operation = TokenizationOperation.objects.create(
         property=prop,
         issuer=request.user,
@@ -247,11 +264,11 @@ def issue_property_tokenization(request, pk):
         }, status=201)
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = "failed"
-        operation.error = str(exc)
+        operation.error = client.safe_error_message(exc)
         operation.failed_at = timezone.now()
         operation.save()
         prop.tokenization_status = "failed"
-        prop.tokenization_error = str(exc)
+        prop.tokenization_error = client.safe_error_message(exc)
         if prop.status == "tokenization_pending":
             prop.status = "ready_for_tokenization"
             prop.save(update_fields=["status", "tokenization_status", "tokenization_error", "updated_at"])
@@ -259,7 +276,7 @@ def issue_property_tokenization(request, pk):
             prop.save(update_fields=["tokenization_status", "tokenization_error", "updated_at"])
         notification = push_notification(request, "error", "Tokenization failed.")
         return Response({
-            "error": str(exc),
+            "error": client.safe_error_message(exc),
             "operation": tokenization_operation_payload(operation, request.user),
             "property": property_payload(prop, request.user),
             "notifications": [notification],
@@ -279,15 +296,16 @@ def refresh_tokenization_operation(request, pk):
     operation = _issuer_operation_or_404(request.user, pk)
     if not operation.operation_id:
         return Response({"error": "This tokenization operation has no operation ID to refresh."}, status=400)
+    client = ZcashClient()
     try:
-        result = ZcashClient().refresh_zsa_status(operation.operation_id)
+        result = client.refresh_zsa_status(operation.operation_id)
         operation.mark_from_result(result)
         sync_property_from_operation(operation.property, operation)
         notification = push_notification(request, "success", "Status refreshed.")
         return Response({"operation": tokenization_operation_payload(operation, request.user), "notifications": [notification]})
     except (ZcashConfigurationError, ValueError, RuntimeError) as exc:
         operation.status = "failed"
-        operation.error = str(exc)
+        operation.error = client.safe_error_message(exc)
         operation.failed_at = timezone.now()
         operation.save(update_fields=["status", "error", "failed_at", "updated_at"])
         sync_property_from_operation(operation.property, operation)
