@@ -84,7 +84,7 @@ def role_status(request):
 def issuer_dashboard(request):
     profile = request.user.profile
     if not profile.is_issuer:
-        return Response({"error": "Issuer role required."}, status=403)
+        return Response({"error": "Issuer access is required."}, status=403)
 
     properties = Property.objects.filter(owner=request.user).prefetch_related("documents", "tokenization_operations")
     total_estimated_value = properties.aggregate(total=Sum("estimated_value"))["total"]
@@ -124,7 +124,7 @@ def issuer_dashboard(request):
 def investor_dashboard(request):
     profile = request.user.profile
     if not profile.is_investor:
-        return Response({"error": "Investor role required."}, status=403)
+        return Response({"error": "Investor access is required."}, status=403)
 
     investments = PropertyInvestment.objects.filter(investor=request.user).select_related("property")
     holdings = []

@@ -7,6 +7,27 @@ import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
 import { ApiError, apiGet, apiJson, apiUpload, userFacingError } from "@/lib/api";
 import type { PropertyMutationResponse, PropertyRecord, TokenizationMutationResponse } from "@/types/api";
 
+function enrichmentSourceLabel(provider?: string | null) {
+  if (!provider) return "No data yet";
+  const labels: Record<string, string> = {
+    mock: "Address reference",
+    fixture: "Address reference",
+    census: "US Census Geocoder",
+    regrid: "Parcel data provider",
+    opencage: "Geocoding provider",
+    google: "Geocoding provider"
+  };
+  return labels[provider] ?? "Property data provider";
+}
+
+function labelFromKey(key: string) {
+  return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function metadataEntries(metadata: Record<string, unknown>) {
+  return Object.entries(metadata).filter(([, value]) => value !== null && value !== undefined && value !== "");
+}
+
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [property, setProperty] = useState<PropertyRecord | null>(null);
@@ -144,9 +165,9 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               </StatusBadge>
             </div>
             <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
-              <div><dt className="text-white/40">Provider</dt><dd>{property.enrichment.provider ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Source</dt><dd>{enrichmentSourceLabel(property.enrichment.provider)}</dd></div>
               <div><dt className="text-white/40">Confidence</dt><dd>{property.enrichment.match_confidence ?? "No data yet"}</dd></div>
-              <div><dt className="text-white/40">Source</dt><dd>{property.enrichment.data_source ?? "No data yet"}</dd></div>
+              <div><dt className="text-white/40">Reference</dt><dd>{property.enrichment.data_source && !property.enrichment.data_source.toLowerCase().includes("fixture") ? property.enrichment.data_source : "No data yet"}</dd></div>
               <div><dt className="text-white/40">Coordinates</dt><dd>{property.latitude && property.longitude ? `${property.latitude}, ${property.longitude}` : "No data yet"}</dd></div>
               <div><dt className="text-white/40">Parcel/APN</dt><dd>{property.enrichment.parcel_id ?? property.enrichment.apn ?? "No data yet"}</dd></div>
               <div><dt className="text-white/40">County</dt><dd>{property.enrichment.county ?? "No data yet"}</dd></div>
@@ -168,7 +189,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
             <Card>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Latest Tokenization Operation</h2>
+                  <h2 className="text-xl font-semibold text-white">Latest Tokenization Request</h2>
                   <p className="mt-1 text-sm text-white/55">{property.latest_tokenization_operation.asset_symbol}</p>
                 </div>
                 <StatusBadge tone={property.latest_tokenization_operation.status === "confirmed" ? "good" : property.latest_tokenization_operation.status === "failed" ? "bad" : "warn"}>
@@ -227,8 +248,15 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                       </div>
                       <StatusBadge>{doc.processing_status}</StatusBadge>
                     </div>
-                    {Object.keys(doc.safe_extracted_metadata).length ? (
-                      <pre className="mt-3 overflow-auto rounded-xl bg-black/20 p-3 text-xs text-white/60">{JSON.stringify(doc.safe_extracted_metadata, null, 2)}</pre>
+                    {metadataEntries(doc.safe_extracted_metadata).length ? (
+                      <dl className="mt-3 grid gap-2 rounded-xl bg-black/20 p-3 text-xs text-white/70 sm:grid-cols-2">
+                        {metadataEntries(doc.safe_extracted_metadata).map(([key, value]) => (
+                          <div key={key}>
+                            <dt className="text-white/40">{labelFromKey(key)}</dt>
+                            <dd className="break-words">{String(value)}</dd>
+                          </div>
+                        ))}
+                      </dl>
                     ) : null}
                   </div>
                 ))}
@@ -240,7 +268,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
           {property.ownership.can_upload_documents ? (
             <Card>
               <h2 className="text-xl font-semibold text-white">Upload Document</h2>
-              <p className="mt-1 text-sm text-white/55">Upload a PDF or image. ZReal displays document status and verified metadata only.</p>
+              <p className="mt-1 text-sm text-white/55">Upload a PDF or image. ZReal displays document status and reviewed metadata only.</p>
               <div className="mt-5 grid gap-4 md:grid-cols-[0.7fr_1.3fr_auto] md:items-end">
                 <label className="grid gap-2">
                   <span className="text-sm text-white/60">Document type</span>
@@ -299,7 +327,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
           ) : null}
           {property.tokenization_operations?.length ? (
             <Card>
-              <h2 className="text-xl font-semibold text-white">Tokenization operations</h2>
+              <h2 className="text-xl font-semibold text-white">Tokenization requests</h2>
               <div className="mt-4 grid gap-3">
                 {property.tokenization_operations.map((operation) => (
                   <Link key={operation.id} href={`/tokenization/operations/${operation.id}`} className="rounded-xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-gold/40">
@@ -310,7 +338,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </Card>
           ) : (
-            <EmptyState title="No tokenization operations yet." />
+            <EmptyState title="No tokenization requests yet." />
           )}
         </div>
       ) : null}

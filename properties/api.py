@@ -32,6 +32,7 @@ from .enrichment import (
     enrichment_to_payload,
     resolve_property_address,
     status_for_result,
+    store_reviewable_candidate,
     store_enrichment_result,
 )
 from .models import Property, PropertyDocument, PropertyEnrichment, TokenizationOperation
@@ -92,6 +93,17 @@ def create_property(request):
     prop = form.save(commit=False)
     prop.owner = request.user
     prop.save()
+    candidate = request.data.get("enrichment_candidate")
+    if isinstance(candidate, dict):
+        store_reviewable_candidate(
+            prop,
+            provider=request.data.get("enrichment_provider", ""),
+            candidate_data=candidate,
+            candidates=request.data.get("enrichment_candidates") if isinstance(request.data.get("enrichment_candidates"), list) else None,
+            status=request.data.get("enrichment_status", "needs_review"),
+            warnings=request.data.get("enrichment_warnings") if isinstance(request.data.get("enrichment_warnings"), list) else [],
+            blockers=request.data.get("enrichment_blockers") if isinstance(request.data.get("enrichment_blockers"), list) else [],
+        )
     notification = push_notification(request, "success", "Property draft created.")
     return Response({"property": property_payload(prop, request.user), "notifications": [notification]}, status=201)
 

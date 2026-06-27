@@ -22,7 +22,7 @@ Implemented today:
 - safe document-to-tokenization metadata using document hashes, document types, timestamps, and selected structured fields
 - Stripe checkout integration when Stripe keys are configured
 - JSON endpoints for the product frontend
-- a Next.js frontend in `frontend/`
+- a Next.js product workspace in `frontend/`
 
 ZSA issuance only runs when you configure an external ZSA-capable tool. If required configuration is missing or invalid, tokenization is blocked before operation creation. If the configured tool runs and fails, ZReal records a failed operation with a safe error message.
 
@@ -98,6 +98,8 @@ GOOGLE_GEOCODING_API_KEY=
 ```
 
 Supported provider modes are `mock`, `fixture`, `census`, `regrid`, `opencage`, and `google`. `mock`/`fixture` return local fixture data for tests and development checks. `census` can resolve live addresses only when `PROPERTY_DATA_ENABLE_LIVE_CALLS=1`. Regrid, OpenCage, and Google are keyed provider interfaces until live integration and licensing are approved; the shorter `REGRID_API_KEY`, `OPENCAGE_API_KEY`, and `GOOGLE_GEOCODING_API_KEY` aliases are also accepted.
+
+During property creation, an issuer can resolve an address first and submit the selected candidate with the new property. ZReal stores that candidate as unconfirmed enrichment provenance, not as trusted readiness evidence. The issuer must review and confirm autofilled data before it can stop blocking tokenization readiness.
 
 ## Run
 
@@ -196,6 +198,8 @@ Frontend-facing API endpoints are mounted under `/api/`:
 
 The product endpoints return persisted application data. Empty states are represented as empty arrays or `null` values.
 
+Property readiness responses include an `enrichment` summary with status, confirmation state, normalized address, confidence, warnings, blockers, and whether the enrichment is trusted for readiness.
+
 ## Tokenization Flow
 
 1. User signs in.
@@ -261,7 +265,7 @@ http://127.0.0.1:8000/setup/status/
 - ZSA configuration validation endpoint
 - dashboard metrics from persisted records
 - frontend API layer
-- Next.js product frontend scaffold
+- Next.js product workspace
 - investor tokenized-property browsing
 - property map
 - tokenization audit model

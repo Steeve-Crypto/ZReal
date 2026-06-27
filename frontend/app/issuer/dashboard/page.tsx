@@ -15,7 +15,7 @@ export default function IssuerDashboardPage() {
     apiGet<IssuerDashboard>("/api/dashboard/issuer/")
       .then(setData)
       .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 403) setError("Issuer role required.");
+        if (err instanceof ApiError && err.status === 403) setError("Issuer access is required.");
         else setError("Sign in with an issuer account to view this dashboard.");
       });
   }, []);
@@ -30,14 +30,14 @@ export default function IssuerDashboardPage() {
         </div>
         <a className="nav-pill" href={djangoLoginUrl("/issuer/dashboard/")}>Sign in</a>
       </header>
-      {error ? <EmptyState title={error} detail="Sign in and choose issuer access from your account settings." /> : null}
+      {error ? <EmptyState title={error} detail="Sign in and select issuer access from your account settings." /> : null}
       {data ? (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-4">
             <Stat label="Properties" value={data.metrics.property_count} />
             <Stat label="Tokenized" value={data.metrics.tokenized_count} />
             <Stat label="Estimated value" value={data.metrics.total_estimated_value} />
-            <Stat label="ZSA issued" value={data.metrics.zsa_issued_count} />
+            <Stat label="Issued assets" value={data.metrics.zsa_issued_count} />
           </div>
           <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -20,8 +20,8 @@ export default function PropertyBrowsePage() {
     <Shell>
       <ProductNav />
       <header className="mb-8">
-        <h1 className="text-4xl font-semibold text-white">Property Browse</h1>
-        <p className="mt-2 text-white/55">Only tokenized or active properties are shown.</p>
+        <h1 className="text-4xl font-semibold text-white">Properties</h1>
+        <p className="mt-2 text-white/55">Explore properties that have completed issuer preparation.</p>
       </header>
       {properties.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -44,7 +44,7 @@ export default function PropertyBrowsePage() {
           ))}
         </div>
       ) : (
-        <EmptyState title="No tokenized properties are available yet." detail="Issuer drafts are not visible to investors or public visitors." />
+        <EmptyState title="No properties are available yet." detail="New opportunities will appear here after issuer preparation is complete." />
       )}
     </Shell>
   );

@@ -14,7 +14,7 @@ export default function InvestorDashboardPage() {
     apiGet<InvestorDashboard>("/api/dashboard/investor/")
       .then(setData)
       .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 403) setError("Investor role required.");
+        if (err instanceof ApiError && err.status === 403) setError("Investor access is required.");
         else setError("Sign in with an investor account to view this dashboard.");
       });
   }, []);
@@ -29,7 +29,7 @@ export default function InvestorDashboardPage() {
         </div>
         <a className="nav-pill" href={djangoLoginUrl("/investor/dashboard/")}>Sign in</a>
       </header>
-      {error ? <EmptyState title={error} detail="Sign in and choose investor access from your account settings." /> : null}
+      {error ? <EmptyState title={error} detail="Sign in and select investor access from your account settings." /> : null}
       {data ? (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">

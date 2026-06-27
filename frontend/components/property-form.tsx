@@ -48,6 +48,24 @@ export function cleanPropertyPayload(values: PropertyFormValues) {
   };
 }
 
+export type PropertyFormSubmitContext = {
+  enrichment: PropertyEnrichment | null;
+  selectedCandidate: Record<string, unknown> | null;
+};
+
+function enrichmentSourceLabel(provider?: string | null) {
+  if (!provider) return null;
+  const labels: Record<string, string> = {
+    mock: "Address reference",
+    fixture: "Address reference",
+    census: "US Census Geocoder",
+    regrid: "Parcel data provider",
+    opencage: "Geocoding provider",
+    google: "Geocoding provider"
+  };
+  return labels[provider] ?? "Property data provider";
+}
+
 export function PropertyForm({
   initialValues,
   propertyId,
@@ -60,7 +78,7 @@ export function PropertyForm({
   propertyId?: number;
   initialEnrichment?: PropertyEnrichment | null;
   submitLabel: string;
-  onSubmit: (values: PropertyFormValues) => Promise<void>;
+  onSubmit: (values: PropertyFormValues, context: PropertyFormSubmitContext) => Promise<void>;
   error?: string | null;
 }) {
   const [values, setValues] = useState(initialValues);
@@ -79,7 +97,10 @@ export function PropertyForm({
     event.preventDefault();
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit(values, {
+        enrichment,
+        selectedCandidate: enrichment?.candidates?.[selectedCandidate] ?? null
+      });
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +197,7 @@ export function PropertyForm({
           <div>
             <div className="text-sm font-medium text-white">Property data autofill</div>
             <div className="mt-1 text-xs text-white/50">
-              {enrichment?.provider ? `${enrichment.provider} - ${enrichment.status.replaceAll("_", " ")}` : "Resolve address, then review editable fields before saving."}
+              {enrichment?.provider ? `${enrichmentSourceLabel(enrichment.provider)} - ${enrichment.status.replaceAll("_", " ")}` : "Resolve address, then review editable fields before saving."}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">

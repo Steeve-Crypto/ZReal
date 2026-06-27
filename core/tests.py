@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from pathlib import Path
 
 
@@ -32,6 +32,11 @@ class AuthTemplateTest(TestCase):
             "product frontend",
             "through the API",
             "JSON.stringify(err.data)",
+            "Backend not configured",
+            "mock provider",
+            "demo data",
+            "test data",
+            "prototype",
             "Login URL:",
         ]
         allowed_files = {
@@ -41,6 +46,18 @@ class AuthTemplateTest(TestCase):
         for path in files:
             if path in allowed_files:
                 continue
+            text = path.read_text(encoding="utf-8")
+            for phrase in denied:
+                if phrase in text:
+                    violations.append(f"{path.relative_to(project_root)}: {phrase}")
+        self.assertEqual(violations, [])
+
+    def test_customer_templates_avoid_default_or_scaffolding_copy(self):
+        project_root = Path(__file__).resolve().parents[1]
+        files = list((project_root / "templates" / "account").rglob("*.html"))
+        denied = ["Menu:", "Django login", "Django session", "No fake", "prototype", "demo data"]
+        violations = []
+        for path in files:
             text = path.read_text(encoding="utf-8")
             for phrase in denied:
                 if phrase in text:
@@ -64,6 +81,29 @@ class AuthTemplateTest(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response["Location"])
+
+    @override_settings(
+        SECRET_KEY="secret-key-value",
+        STRIPE_SECRET_KEY="sk_test_super_secret",
+        STRIPE_ISSUER_PRICE_ID="price_secret",
+        ZCASH_RPC_URL="http://user:super-secret@127.0.0.1:18232",
+        ZCASH_TX_TOOL_PATH="C:\\sensitive\\zcash-tool.exe",
+    )
+    def test_setup_status_pages_do_not_leak_secret_values(self):
+        client = Client()
+        User.objects.create_superuser(username="setup_staff", email="setup_staff@example.com", password="pass")
+        client.login(username="setup_staff", password="pass")
+
+        html_response = client.get("/setup/status/")
+        api_response = client.get("/api/setup/status/")
+
+        self.assertEqual(html_response.status_code, 200)
+        self.assertEqual(api_response.status_code, 200)
+        combined = html_response.content.decode() + str(api_response.json())
+        self.assertNotIn("sk_test_super_secret", combined)
+        self.assertNotIn("price_secret", combined)
+        self.assertNotIn("super-secret", combined)
+        self.assertNotIn("secret-key-value", combined)
 
     def test_login_preserves_next_parameter(self):
         response = Client().get("/accounts/login/?next=/issuer/dashboard/")

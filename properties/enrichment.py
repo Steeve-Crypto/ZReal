@@ -98,7 +98,7 @@ def decimal_or_none(value):
 
 class MockPropertyDataProvider(BasePropertyDataProvider):
     slug = "mock"
-    data_source = "ZReal fixture property data"
+    data_source = "ZReal address reference data"
 
     def resolve_address(self, address: str) -> PropertyDataResult:
         normalized = " ".join(address.split()).strip()
@@ -117,17 +117,9 @@ class MockPropertyDataProvider(BasePropertyDataProvider):
             postal_code="20500",
             county="District of Columbia",
             jurisdiction="District of Columbia",
-            parcel_id="MOCK-PARCEL-001",
-            apn="MOCK-APN-001",
-            lot_size=Decimal("7800.00"),
-            building_area=Decimal("5500.00"),
-            year_built=1998,
-            property_type="Residential",
-            assessed_value=Decimal("750000.00"),
-            tax_value=Decimal("735000.00"),
-            source_record_id="fixture-001",
+            source_record_id="local-reference-001",
             data_source=self.data_source,
-            warnings=[] if confidence >= CONFIDENCE_REVIEW_THRESHOLD else ["Low confidence fixture match; issuer review required."],
+            warnings=[] if confidence >= CONFIDENCE_REVIEW_THRESHOLD else ["Low confidence address match; issuer review required."],
         )
         candidates = [candidate]
         if "ambiguous" in lowered:
@@ -137,8 +129,8 @@ class MockPropertyDataProvider(BasePropertyDataProvider):
                 longitude=Decimal("-77.036600"),
                 match_confidence=Decimal("0.5800"),
                 data_source=self.data_source,
-                source_record_id="fixture-002",
-                warnings=["Alternate fixture candidate."],
+                source_record_id="local-reference-002",
+                warnings=["Alternate address candidate."],
             )
             candidates.append(alt)
         return PropertyDataResult(self.slug, candidates, warnings=candidate.warnings)
@@ -255,6 +247,51 @@ def store_enrichment_result(prop, result: PropertyDataResult):
             "source_record_id", "data_source", "match_confidence",
         ]:
             setattr(enrichment, field_name, getattr(candidate, field_name))
+    enrichment.save()
+    return enrichment
+
+
+def store_reviewable_candidate(
+    prop,
+    *,
+    provider: str,
+    candidate_data: dict[str, Any],
+    candidates: list[dict[str, Any]] | None = None,
+    status: str = "needs_review",
+    warnings: list[str] | None = None,
+    blockers: list[str] | None = None,
+):
+    """Persist client-reviewed autofill data without marking it trusted."""
+    allowed_statuses = {"enriched", "needs_review", "failed"}
+    enrichment, _ = PropertyEnrichment.objects.get_or_create(property=prop)
+    enrichment.status = status if status in allowed_statuses else "needs_review"
+    enrichment.provider = str(provider or "")[:64]
+    enrichment.retrieved_at = timezone.now()
+    enrichment.confirmed_at = None
+    enrichment.confirmed_by = None
+    enrichment.warnings = list(warnings or [])
+    enrichment.blockers = list(blockers or [])
+    enrichment.candidates = list(candidates or ([candidate_data] if candidate_data else []))
+    enrichment.safe_payload = dict(candidate_data or {})
+
+    for field_name in [
+        "normalized_address", "address_line_1", "city", "state", "postal_code", "country",
+        "county", "jurisdiction", "parcel_id", "apn", "property_type", "source_record_id",
+        "data_source",
+    ]:
+        if field_name in candidate_data:
+            setattr(enrichment, field_name, str(candidate_data.get(field_name) or ""))
+
+    for field_name in ["latitude", "longitude", "lot_size", "building_area", "assessed_value", "tax_value", "match_confidence"]:
+        if field_name in candidate_data:
+            setattr(enrichment, field_name, decimal_or_none(candidate_data.get(field_name)))
+
+    if "year_built" in candidate_data:
+        try:
+            enrichment.year_built = int(candidate_data["year_built"]) if candidate_data.get("year_built") else None
+        except (TypeError, ValueError):
+            enrichment.year_built = None
+
     enrichment.save()
     return enrichment
 

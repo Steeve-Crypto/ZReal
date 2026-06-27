@@ -23,7 +23,7 @@
 2. `/profile/role/` lets users choose investor or issuer.
 3. `/issuer/dashboard/` shows issuer-owned properties and real database metrics.
 4. `/properties/new/` and `/properties/<id>/edit/` manage issuer-owned property data.
-5. `/api/properties/resolve-address/`, `/api/properties/<id>/enrich/`, and `/api/properties/<id>/confirm-enrichment/` support address-first autofill with issuer review before data is trusted.
+5. `/api/properties/resolve-address/`, `/api/properties/new/`, `/api/properties/<id>/enrich/`, and `/api/properties/<id>/confirm-enrichment/` support address-first autofill with issuer review before data is trusted.
 6. `/properties/<id>/upload-document/` accepts documents only from the owning issuer.
 7. `/properties/<id>/issue-zsa/` creates a `TokenizationOperation` and calls the configured ZSA backend.
 8. `/properties/<id>/refresh-zsa-status/` refreshes pending operation state.
@@ -31,6 +31,8 @@
 ## Property Data Boundary
 
 Property enrichment is provider-agnostic. Local and CI usage defaults to `PROPERTY_DATA_PROVIDER=mock` with live calls disabled. Live providers must be explicitly enabled and configured, and raw provider payloads are not exposed to issuers.
+
+Create-time autofill can persist the selected safe candidate as `PropertyEnrichment`, but confirmation remains empty until the issuer reviews it. Readiness exposes an enrichment summary and treats unconfirmed autofill as a blocker.
 
 ## ZSA Boundary
 

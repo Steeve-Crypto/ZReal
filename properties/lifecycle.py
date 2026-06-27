@@ -63,6 +63,28 @@ def _check(key: str, label: str, ok: bool, detail: str = "", required: bool = Tr
     }
 
 
+def _enrichment_summary(enrichment, requires_review: bool) -> dict[str, Any]:
+    if not enrichment:
+        return {
+            "status": "not_started",
+            "is_confirmed": False,
+            "trusted_for_readiness": True,
+            "normalized_address": None,
+            "match_confidence": None,
+            "warnings": [],
+            "blockers": [],
+        }
+    return {
+        "status": enrichment.status,
+        "is_confirmed": bool(enrichment.confirmed_at),
+        "trusted_for_readiness": not requires_review,
+        "normalized_address": enrichment.normalized_address or None,
+        "match_confidence": str(enrichment.match_confidence) if enrichment.match_confidence is not None else None,
+        "warnings": enrichment.warnings or [],
+        "blockers": enrichment.blockers or [],
+    }
+
+
 def evaluate_property_readiness(prop, user=None, zsa_report=None):
     if zsa_report is None:
         zsa_report = ZcashClient().configuration_report()
@@ -139,6 +161,7 @@ def evaluate_property_readiness(prop, user=None, zsa_report=None):
         "ready_for_tokenization": ready_for_tokenization,
         "checks": checks,
         "blocking_issues": blocking_issues,
+        "enrichment": _enrichment_summary(enrichment, enrichment_requires_review),
         "zsa": zsa_report,
         "next_action": next_action,
     }

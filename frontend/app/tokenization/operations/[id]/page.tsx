@@ -6,6 +6,14 @@ import { Card, EmptyState, Shell, StatusBadge } from "@/components/ui";
 import { apiGet, apiJson, userFacingError } from "@/lib/api";
 import type { TokenizationMutationResponse, TokenizationOperation } from "@/types/api";
 
+function labelFromKey(key: string) {
+  return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function metadataEntries(metadata: Record<string, unknown>) {
+  return Object.entries(metadata).filter(([, value]) => value !== null && value !== undefined && value !== "");
+}
+
 export default function TokenizationOperationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [operation, setOperation] = useState<TokenizationOperation | null>(null);
@@ -76,10 +84,19 @@ export default function TokenizationOperationPage({ params }: { params: Promise<
               <div><dt className="text-white/40">Last refresh</dt><dd>{operation.last_status_refreshed_at ?? "No data yet"}</dd></div>
             </dl>
           </Card>
-          <Card>
-            <h2 className="text-xl font-semibold text-white">Safe metadata</h2>
-            <pre className="mt-4 overflow-auto rounded-xl bg-black/25 p-4 text-xs text-white/65">{JSON.stringify(operation.safe_metadata, null, 2)}</pre>
-          </Card>
+          {metadataEntries(operation.safe_metadata).length ? (
+            <Card>
+              <h2 className="text-xl font-semibold text-white">Issuance metadata</h2>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                {metadataEntries(operation.safe_metadata).map(([key, value]) => (
+                  <div key={key} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                    <dt className="text-white/40">{labelFromKey(key)}</dt>
+                    <dd className="mt-1 break-words text-white/75">{Array.isArray(value) ? `${value.length} item${value.length === 1 ? "" : "s"}` : String(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          ) : null}
           {operation.can_view_raw_response ? (
             <Card>
               <h2 className="text-xl font-semibold text-white">Staff response details</h2>

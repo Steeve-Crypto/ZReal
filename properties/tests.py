@@ -563,6 +563,51 @@ class ProductApiTest(TestCase):
         self.assertIsNone(prop.size_sqm)
         self.assertEqual(prop.total_shares, 10000)
 
+    def test_property_create_persists_reviewable_enrichment_candidate(self):
+        issuer = make_user("api_create_enriched_issuer", "issuer")
+        client = Client()
+        client.login(username="api_create_enriched_issuer", password="pass")
+
+        response = client.post(
+            "/api/properties/new/",
+            data={
+                "address": "1600 Pennsylvania Ave",
+                "latitude": "38.897700",
+                "longitude": "-77.036500",
+                "estimated_value": "750000.00",
+                "total_shares": "10000",
+                "enrichment_status": "enriched",
+                "enrichment_provider": "mock",
+                "enrichment_candidate": {
+                    "normalized_address": "1600 Pennsylvania Ave",
+                    "latitude": "38.897700",
+                    "longitude": "-77.036500",
+                    "match_confidence": "0.9400",
+                    "data_source": "ZReal address reference data",
+                },
+                "enrichment_candidates": [
+                    {
+                        "normalized_address": "1600 Pennsylvania Ave",
+                        "match_confidence": "0.9400",
+                    }
+                ],
+                "enrichment_warnings": [],
+                "enrichment_blockers": [],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        prop = Property.objects.get(owner=issuer)
+        self.assertEqual(prop.enrichment.provider, "mock")
+        self.assertEqual(prop.enrichment.normalized_address, "1600 Pennsylvania Ave")
+        self.assertEqual(prop.enrichment.parcel_id, "")
+        self.assertIsNone(prop.enrichment.confirmed_at)
+        readiness = response.json()["property"]["readiness"]
+        self.assertEqual(readiness["enrichment"]["status"], "enriched")
+        self.assertFalse(readiness["enrichment"]["trusted_for_readiness"])
+        self.assertIn("Autofilled property data must be reviewed and confirmed before tokenization.", readiness["blocking_issues"])
+
     @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
     def test_address_resolution_populates_enrichment_from_mock_provider(self):
         issuer = make_user("api_enrich_issuer", "issuer")
@@ -581,6 +626,7 @@ class ProductApiTest(TestCase):
         self.assertEqual(data["enrichment"]["status"], "enriched")
         self.assertEqual(data["enrichment"]["provider"], "mock")
         self.assertEqual(data["enrichment"]["latitude"], "38.897700")
+        self.assertIsNone(data["enrichment"]["parcel_id"])
         self.assertEqual(data["property"]["enrichment"]["normalized_address"], "1600 Pennsylvania Ave")
 
     @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
@@ -614,6 +660,8 @@ class ProductApiTest(TestCase):
         self.assertEqual(response.json()["enrichment"]["status"], "needs_review")
         readiness = client.get(f"/api/properties/{prop.pk}/readiness/").json()
         self.assertFalse(readiness["ready_for_tokenization"])
+        self.assertEqual(readiness["enrichment"]["status"], "needs_review")
+        self.assertFalse(readiness["enrichment"]["trusted_for_readiness"])
         self.assertIn("Autofilled property data must be reviewed and confirmed before tokenization.", readiness["blocking_issues"])
 
     @override_settings(PROPERTY_DATA_PROVIDER="mock", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
@@ -645,6 +693,7 @@ class ProductApiTest(TestCase):
         self.assertIsNotNone(prop.enrichment.confirmed_at)
         readiness = response.json()["property"]["readiness"]
         self.assertTrue(next(check for check in readiness["checks"] if check["key"] == "property_data_reviewed")["ok"])
+        self.assertTrue(readiness["enrichment"]["trusted_for_readiness"])
 
     @override_settings(PROPERTY_DATA_PROVIDER="regrid", PROPERTY_DATA_REGRID_API_KEY="", PROPERTY_DATA_ENABLE_LIVE_CALLS=False)
     def test_missing_provider_key_returns_warning_not_crash(self):
@@ -705,7 +754,7 @@ class ProductApiTest(TestCase):
         client = Client()
         client.login(username="api_locked_enrich_issuer", password="pass")
 
-        for status in ["tokenization_pending", "tokenized", "active"]:
+        for status in ["tokenization_pending", "tokenized", "active", "suspended"]:
             prop = make_property(issuer, title=f"Locked {status}", status=status)
             enrich_response = client.post(f"/api/properties/{prop.pk}/enrich/", data={}, content_type="application/json")
             edit_response = client.patch(

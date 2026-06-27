@@ -43,6 +43,15 @@ export type PropertyReadiness = {
   ready_for_tokenization: boolean;
   checks: ReadinessCheck[];
   blocking_issues: string[];
+  enrichment: {
+    status: "not_started" | "pending" | "enriched" | "needs_review" | "failed";
+    is_confirmed: boolean;
+    trusted_for_readiness: boolean;
+    normalized_address: string | null;
+    match_confidence: string | null;
+    warnings: string[];
+    blockers: string[];
+  };
   zsa: ZsaConfig;
   next_action: string;
 };

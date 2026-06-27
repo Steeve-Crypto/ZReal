@@ -11,7 +11,7 @@ export default function HomePage() {
         <div>
           <div className="mb-4 text-xs uppercase tracking-[0.22em] text-gold">Private property rails</div>
           <h1 className="max-w-4xl text-5xl font-semibold leading-[0.95] text-white sm:text-7xl">
-            Private real estate tokenization with issuer-controlled records.
+            Private real estate tokenization with issuer-controlled workflows.
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-white/62">
             ZReal helps issuers organize property records, review supporting documents, and manage ZSA tokenization readiness from one secure workspace.
@@ -29,8 +29,8 @@ export default function HomePage() {
           <div className="flex items-start gap-4">
             <ShieldCheck className="mt-1 text-gold" />
             <div>
-              <h2 className="font-semibold text-white">Truthful tokenization</h2>
-              <p className="mt-1 text-sm text-white/58">Tokenization records show only submitted operations and identifiers returned by configured issuance tooling.</p>
+              <h2 className="font-semibold text-white">Verified issuance history</h2>
+              <p className="mt-1 text-sm text-white/58">Tokenization records reflect submitted operations and identifiers returned by approved issuance tooling.</p>
             </div>
           </div>
           <div className="flex items-start gap-4">

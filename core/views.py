@@ -244,8 +244,8 @@ def create_checkout_session(request):
             },
         )
         return JsonResponse({'id': checkout_session.id, 'url': checkout_session.url})
-    except Exception as exc:
-        return JsonResponse({'error': str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({'error': 'Billing could not be started. Review billing setup or contact support.'}, status=400)
 
 
 @csrf_exempt

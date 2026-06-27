@@ -351,8 +351,8 @@ def generate_sapling_address_view(request):
     try:
         result = client.generate_sapling_address(address_type)
         return JsonResponse({"address": result})
-    except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({"error": "Address generation is unavailable. Review wallet setup or contact support."}, status=400)
 
 class PropertyViewSet(viewsets.ModelViewSet):
     serializer_class = PropertySerializer  # Define in serializers.py
