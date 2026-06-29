@@ -172,6 +172,9 @@ logs/
 tmp/
 temp/
 
+# Local Codex/MCP connector metadata
+mcps/
+
 venv/
 .venv/
 __pycache__/
